@@ -26,7 +26,10 @@ jobs:
           package-manager-cache: false  # never cache in release builds
 
       - name: Update npm  # Trusted Publishing requires npm ≥ 11.5.1
-        run: npm install -g npm@latest
+        run: |
+          corepack enable
+          corepack prepare npm@latest --activate
+          npm --version
 
       - name: Install dependencies
         run: npm ci
