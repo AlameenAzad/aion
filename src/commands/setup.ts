@@ -696,13 +696,13 @@ export async function runSetup(): Promise<void> {
   console.log();
   console.log(
     chalk.dim('Run ') +
-    chalk.cyan('aion preview') +
-    chalk.dim(' to see your worklogs before syncing.')
+      chalk.cyan('aion preview') +
+      chalk.dim(' to see your worklogs before syncing.')
   );
   console.log(
     chalk.dim('Run ') +
-    chalk.cyan('aion sync') +
-    chalk.dim(" to sync this month's worklogs to Dyce.")
+      chalk.cyan('aion sync') +
+      chalk.dim(" to sync this month's worklogs to Dyce.")
   );
   console.log();
 }
