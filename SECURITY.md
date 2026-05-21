@@ -45,12 +45,17 @@ Issues that are **out of scope:**
 
 ## Security best practices for users
 
-aion stores API tokens in `~/.aion/config.json` in plaintext. To protect your credentials:
+On **macOS, Linux, and Windows**, aion stores all API tokens and passwords in the OS credential store (macOS Keychain, GNOME Keyring / KWallet, Windows Credential Manager). Only non-sensitive settings are written to `~/.aion/config.json`.
+
+On **unsupported platforms** (or when `AION_DISABLE_KEYCHAIN=1` is set), tokens fall back to `~/.aion/config.json` in plaintext. In that case:
 
 - **Restrict file permissions:**
   ```bash
   chmod 600 ~/.aion/config.json
   ```
+
+In all cases:
+
 - Do not commit `~/.aion/config.json` to version control
 - Use API tokens with the minimum required scopes (read-only Tempo, read-only Jira, write Dyce)
 - Rotate tokens periodically and update aion with `aion setup`

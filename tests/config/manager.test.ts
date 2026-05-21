@@ -15,6 +15,22 @@ import { Config } from '../../src/config/schema';
 
 jest.mock('fs');
 
+// Disable keychain in all manager tests — secrets live in the JSON file here.
+jest.mock('../../src/config/keychain', () => ({
+  keychainAvailable: false,
+  getSecret: jest.fn().mockReturnValue(null),
+  setSecret: jest.fn(),
+  deleteSecret: jest.fn(),
+  deleteAllSecrets: jest.fn(),
+  SECRET_ACCOUNTS: {
+    tempoToken: 'tempo-token',
+    jiraToken: 'jira-token',
+    dyceRefreshToken: 'dyce-refresh-token',
+    dyceAccessToken: 'dyce-access-token',
+    paserPassword: 'paser-password',
+  },
+}));
+
 const mockedFs = fs as jest.Mocked<typeof fs>;
 const mockReadFileSync = mockedFs.readFileSync as jest.Mock;
 

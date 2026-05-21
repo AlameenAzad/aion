@@ -18,6 +18,7 @@ import { PaserClient } from '../api/paser';
 import { DyceClient } from '../api/dyce';
 import { refreshAccessToken } from '../api/msauth';
 import { saveConfig, loadDraft, saveDraft, clearDraft, SetupDraft } from '../config/manager';
+import { keychainAvailable } from '../config/keychain';
 import { Config, DyceMapping } from '../config/schema';
 import { configureLeaveTypeMappings, LeaveTypeMappings } from '../utils/leaveSetup';
 
@@ -692,7 +693,13 @@ export async function runSetup(): Promise<void> {
   process.off('SIGTERM', onAbort);
 
   console.log();
-  console.log(chalk.green.bold('✔  Setup complete! Config saved to ~/.aion/config.json'));
+  if (keychainAvailable) {
+    console.log(chalk.green.bold('✔  Setup complete! API tokens stored in the OS Keychain.'));
+    console.log(chalk.dim('   Non-sensitive settings saved to ~/.aion/config.json'));
+  } else {
+    console.log(chalk.green.bold('✔  Setup complete! Config saved to ~/.aion/config.json'));
+    console.log(chalk.dim('   Tip: chmod 600 ~/.aion/config.json to protect stored credentials.'));
+  }
   console.log();
   console.log(
     chalk.dim('Run ') +
