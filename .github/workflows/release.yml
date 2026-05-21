@@ -28,7 +28,7 @@ jobs:
       - name: Update npm  # Trusted Publishing requires npm ≥ 11.5.1
         run: |
           corepack enable
-          corepack prepare npm@latest --activate
+          corepack prepare npm@11 --activate
           npm --version
 
       - name: Install dependencies
@@ -45,6 +45,8 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ''  # must be empty so OIDC Trusted Publishing takes over
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
