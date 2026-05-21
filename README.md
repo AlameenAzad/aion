@@ -1,12 +1,12 @@
 <div align="center">
 
-```
+<pre align="center">
      /\    |_   _|/ __ \ | \ | |
     /  \     | | | |  | ||  \| |
    / /\ \    | | | |  | || . ` |
   / ____ \  _| |_| |__| || |\  |
  /_/    \_\|_____|\____/ |_| \_|
-```
+</pre>
 
 **Eternal. Automatic. Effortless.**
 
@@ -27,7 +27,8 @@
 - Fetches worklogs from Tempo for any date range
 - Enriches them with Jira issue titles
 - Maps Jira projects → Dyce customers / jobs / tasks (configured once)
-- Detects vacation/leave entries and prompts for a Paser.io request ID
+- Detects vacation, sick leave, and public holiday entries — each routed to a dedicated Dyce target
+- Auto-matches Paser.io requests by date range for vacation and sick leave
 - Silently skips already-synced entries (no duplicates, ever)
 - Rich terminal UI: ASCII banner, spinners, colorized preview table
 
@@ -60,6 +61,7 @@
 | Node.js | ≥ 18 |
 | Tempo | Cloud (API v4) |
 | Jira | Cloud (API v3) |
+| Paser | Cloud |
 | Dyce | Cloud |
 
 ---
@@ -97,16 +99,18 @@ aion sync
 
 ### `aion setup`
 
-Interactive wizard that walks you through connecting Tempo, Jira, and Dyce.
+Interactive wizard that walks you through connecting Tempo, Jira, Paser, and Dyce.
 
 ```
 Steps:
-  [1/6] Tempo API        — token + region
-  [2/6] Jira API         — base URL, email, token (also fetches your accountId)
-  [3/6] Dyce API         — bearer token, x-instance, x-company, resource auto-detection
-  [4/6] Project mappings — Jira project key → Dyce Customer / Job / Job Task
-  [5/6] Vacation prefixes — which Jira project keys mean vacation/leave
-  [6/6] Save             — writes ~/.aion/config.json
+  [1/7] Tempo API         — token + region
+  [2/7] Jira API          — base URL, email, token (also fetches your accountId)
+  [3/7] Dyce API          — bearer token, x-instance, x-company, resource auto-detection
+  [4/7] Paser API         — base URL, email, password, account selection
+  [5/7] Project mappings  — Jira project key → Dyce Customer / Job / Job Task
+  [6/7] Leave detection   — which Jira tickets mean vacation/leave, then configure a
+                            separate Dyce target for Vacation, Sick Leave, and Public Holiday
+  [7/7] Save              — writes ~/.aion/config.json
 ```
 
 Re-run at any time to reconfigure. You can also use `aion config` sub-commands to make targeted changes without going through the full wizard.
@@ -129,9 +133,11 @@ aion sync --from 2026-05-01 --to 2026-05-14
 1. Fetches worklogs from Tempo
 2. Enriches with Jira issue titles (batched)
 3. Shows a preview table with status for each entry
-4. Prompts for a Paser.io request ID on vacation/leave entries
-5. Asks for confirmation, then POSTs to Dyce
-6. Marks synced IDs in `~/.aion/synced.json` (prevents duplicates)
+4. Auto-matches Paser.io vacation/sick requests by date range
+5. If multiple Paser requests match one day, prompts you to choose
+6. If no Paser request matches, asks for manual Paser request ID
+7. Asks for confirmation, then POSTs to Dyce
+8. Marks synced IDs in `~/.aion/synced.json` (prevents duplicates)
 
 ---
 
@@ -154,7 +160,8 @@ Manage your configuration without re-running the full wizard.
 ```bash
 aion config list            # show current config (tokens masked)
 aion config add-mapping     # add/update a Jira → Dyce project mapping
-aion config set-vacation    # update vacation/leave project key prefixes
+aion config set-vacation    # update vacation/leave prefixes AND Dyce targets per leave type
+aion config edit-paser      # update Paser credentials/account
 ```
 
 **Example `config list` output:**
@@ -187,6 +194,11 @@ Project Mappings:
 
 Vacation Prefixes:
   VAC, LEAVE, SICK
+
+Leave Type Mappings:
+  vacation     : C002 / J-VAC / T-VAC
+  sickLeave    : C002 / J-SICK / T-SICK
+  publicHoliday: C002 / J-HOL / T-HOL
 ```
 
 ---
@@ -214,6 +226,12 @@ Config is stored at `~/.aion/config.json`. Tokens are never logged to the termin
     "resourceNo": "EMP001",
     "resourceId": "uuid-optional"
   },
+  "paser": {
+    "baseUrl": "https://app.paser.io",
+    "email": "you@company.com",
+    "password": "...",
+    "accountId": 90
+  },
   "mappings": [
     {
       "jiraProjectKey": "PROJ",
@@ -225,7 +243,21 @@ Config is stored at `~/.aion/config.json`. Tokens are never logged to the termin
       }
     }
   ],
-  "vacationPrefixes": ["VAC", "LEAVE", "SICK"]
+  "vacationPrefixes": ["VAC", "LEAVE", "SICK"],
+  "leaveTypeMappings": {
+    "vacation": {
+      "label": "Vacation",
+      "dyce": { "customerNo": "C002", "jobNo": "J-VAC", "jobTaskNo": "T-VAC" }
+    },
+    "sickLeave": {
+      "label": "Sick Leave",
+      "dyce": { "customerNo": "C002", "jobNo": "J-SICK", "jobTaskNo": "T-SICK" }
+    },
+    "publicHoliday": {
+      "label": "Public / Bank Holiday",
+      "dyce": { "customerNo": "C002", "jobNo": "J-HOL", "jobTaskNo": "T-HOL" }
+    }
+  }
 }
 ```
 
@@ -245,13 +277,28 @@ Config is stored at `~/.aion/config.json`. Tokens are never logged to the termin
 
 ## Vacation / leave detection
 
-If a worklog's Jira issue key matches any prefix in `vacationPrefixes` (e.g. `VAC-12` matches `VAC`), aion:
+If a worklog's Jira issue key matches any value in `vacationPrefixes` (e.g. `VAC-12` matches `VAC`, or an exact ticket like `INP1-11755`), aion treats it as a leave entry.
 
-1. Marks the entry as **VACATION** in the preview table
-2. Prompts you for a **Paser.io request ID** before syncing
-3. Includes it in the Dyce description: `VAC-12: Annual leave | Paser: REQ-9876`
+**During sync you choose the leave type:**
 
-Configure prefixes during setup or with `aion config set-vacation`.
+| Type | Paser ID required? | Dyce target |
+|---|---|---|
+| Vacation | Yes | `leaveTypeMappings.vacation` |
+| Sick Leave | Yes | `leaveTypeMappings.sickLeave` |
+| Public / Bank Holiday | No | `leaveTypeMappings.publicHoliday` |
+
+Each leave type is logged to its **own** Dyce customer / project / task — completely separate from your regular work mappings. If no dedicated mapping is configured for a type, aion falls back to the regular Jira project mapping and shows a warning.
+
+**Paser auto-matching (Vacation & Sick Leave):**
+
+1. Looks up Paser requests where the worklog day falls inside the request date range
+2. Auto-uses the matching request ID when there is exactly one match
+3. Prompts you to choose when multiple requests overlap the same day
+4. Falls back to manual Paser ID entry when no match is found
+
+If a matched request is not `Approved`/`Completed`, aion shows a warning but still lets you proceed.
+
+Configure prefixes and Dyce targets during setup (Step 6) or with `aion config set-vacation`.
 
 ---
 
