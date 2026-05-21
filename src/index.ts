@@ -10,6 +10,7 @@ import {
   runConfigSetVacation,
   runConfigEditTempo,
   runConfigEditJira,
+  runConfigEditPaser,
   runConfigReAuthDyce,
 } from './commands/config';
 import { configExists } from './config/manager';
@@ -136,6 +137,18 @@ configCmd
   .action(async () => {
     try {
       await runConfigEditJira();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+configCmd
+  .command('edit-paser')
+  .description('Update Paser base URL, email, password, and account')
+  .action(async () => {
+    try {
+      await runConfigEditPaser();
     } catch (err) {
       console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
       process.exit(1);

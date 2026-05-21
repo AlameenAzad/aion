@@ -1,5 +1,11 @@
 import axios, { AxiosInstance } from 'axios';
 
+function withCause(message: string, cause: unknown): Error {
+  const error = new Error(message) as Error & { cause?: unknown };
+  error.cause = cause;
+  return error;
+}
+
 export interface DyceResource {
   id: string;
   no: string;
@@ -87,7 +93,7 @@ export class DyceClient {
           (body?.error as string | undefined) ??
           (body?.title as string | undefined) ??
           JSON.stringify(body);
-        throw new Error(`HTTP ${err.response.status}: ${message}`);
+        throw withCause(`HTTP ${err.response.status}: ${message}`, err);
       }
       throw err;
     }

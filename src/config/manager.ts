@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Config, ConfigSchema, DyceMapping } from './schema';
+import { Config, ConfigSchema, DyceMapping, DyceLeaveMapping } from './schema';
 
 const CONFIG_DIR = path.join(os.homedir(), '.aion');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -63,7 +63,7 @@ export function maskToken(token: string): string {
 const SETUP_DRAFT_FILE = path.join(CONFIG_DIR, 'setup-draft.json');
 
 export interface SetupDraft {
-  /** Last fully completed step number (1–5) */
+  /** Last fully completed step number (1–6) */
   step: number;
   tempo?: { token: string; baseUrl: string; accountId: string };
   jira?: { baseUrl: string; email: string; token: string };
@@ -78,9 +78,20 @@ export interface SetupDraft {
     resourceId?: string;
     resourceName?: string;
   };
+  paser?: {
+    baseUrl: string;
+    email: string;
+    password: string;
+    accountId: number;
+  };
   mappings?: DyceMapping[];
   vacationPrefixes?: string[];
   publicHolidayDescription?: string;
+  leaveTypeMappings?: {
+    vacation?: DyceLeaveMapping;
+    sickLeave?: DyceLeaveMapping;
+    publicHoliday?: DyceLeaveMapping;
+  };
 }
 
 export function loadDraft(): SetupDraft | null {

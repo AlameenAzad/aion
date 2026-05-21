@@ -14,10 +14,12 @@ import {
 import { withSpinner } from '../ui/spinner';
 import { TempoClient, getTempoBaseUrl } from '../api/tempo';
 import { JiraClient } from '../api/jira';
+import { PaserClient } from '../api/paser';
 import { DyceClient } from '../api/dyce';
 import { refreshAccessToken } from '../api/msauth';
 import { saveConfig, loadDraft, saveDraft, clearDraft, SetupDraft } from '../config/manager';
-import { Config, DyceMapping } from '../config/schema';
+import { Config, DyceMapping, DyceLeaveMapping } from '../config/schema';
+import { configureLeaveTypeMappings, LeaveTypeMappings } from '../utils/leaveSetup';
 
 /** Safely decode a URL-encoded string (e.g. "My%20Company" → "My Company"). */
 function decodeInput(value: string): string {
@@ -28,13 +30,13 @@ function decodeInput(value: string): string {
   }
 }
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 export async function runSetup(): Promise<void> {
   showBanner();
 
   console.log(chalk.bold('Welcome to aion setup!'));
-  console.log(chalk.dim('This wizard will configure your Tempo, Jira, and Dyce credentials.\n'));
+  console.log(chalk.dim('This wizard will configure your Tempo, Jira, Paser, and Dyce credentials.\n'));
 
   // ── Draft / resume ────────────────────────────────────────────────────────────
   let draft: SetupDraft = loadDraft() ?? { step: 0 };
@@ -50,7 +52,7 @@ export async function runSetup(): Promise<void> {
 
   if (draft.step > 0) {
     console.log(
-      chalk.yellow(`  ⚠  Found an incomplete setup draft (${draft.step} of 5 steps completed).`)
+      chalk.yellow(`  ⚠  Found an incomplete setup draft (${draft.step} of 6 steps completed).`)
     );
     const resume = await promptConfirm('Resume from where you left off?', true);
     if (resume) {
@@ -335,17 +337,113 @@ export async function runSetup(): Promise<void> {
   // dyceClient is available throughout step 4 (mapping resolution)
   const dyceClient = new DyceClient(dyceAccessToken, dyceInstance, dyceCompany);
 
-  // ── Step 4: Project Mappings ──────────────────────────────────────────────────
-  printStep(4, TOTAL_STEPS, 'Project Mappings');
+  // ── Step 4: Paser ───────────────────────────────────────────────────────────
+  printStep(4, TOTAL_STEPS, 'Paser API');
+
+  let paserBaseUrl: string;
+  let paserEmail: string;
+  let paserPassword: string;
+  let paserAccountId: number;
+
+  if (resuming && draft.step >= 4 && draft.paser) {
+    ({
+      baseUrl: paserBaseUrl,
+      email: paserEmail,
+      password: paserPassword,
+      accountId: paserAccountId,
+    } = draft.paser);
+    printSuccess('  Paser credentials restored from draft');
+  } else {
+    printHint('Use your Paser email/password. aion will use session cookies automatically during sync.');
+
+    paserBaseUrl = await promptText(
+      'Paser base URL:',
+      'https://app.paser.io',
+      (v) => {
+        try {
+          new URL(v);
+          return true;
+        } catch {
+          return 'Enter a valid URL';
+        }
+      }
+    );
+
+    paserEmail = await promptText('Paser email address:', jiraEmail, (v) =>
+      v.includes('@') ? true : 'Enter a valid email'
+    );
+
+    paserPassword = await promptPassword(
+      'Paser password:',
+      (v) => v.trim().length > 0 || 'Password cannot be empty'
+    );
+
+    try {
+      const paserClient = new PaserClient(paserBaseUrl);
+      const auth = await withSpinner('Connecting to Paser…', () =>
+        paserClient.testConnection(paserEmail, paserPassword)
+      );
+
+      const userAccounts = (auth.user.accounts ?? []).map((a) => ({
+        accountId: a.accountId,
+        accountName: a.accountName,
+      }));
+
+      if (userAccounts.length === 0) {
+        throw new Error('No accounts returned from Paser for this user.');
+      }
+
+      if (userAccounts.length === 1) {
+        paserAccountId = userAccounts[0].accountId;
+      } else {
+        const selected = await promptList(
+          'Select Paser account:',
+          userAccounts.map((a) => ({
+            name: `${a.accountName} (${a.accountId})`,
+            value: String(a.accountId),
+          }))
+        );
+        paserAccountId = Number(selected);
+      }
+
+      printSuccess(`Paser connection successful (accountId: ${paserAccountId})`);
+    } catch (err) {
+      printError(`Paser connection failed: ${err instanceof Error ? err.message : String(err)}`);
+      const proceed = await promptConfirm('Continue anyway?', false);
+      if (!proceed) process.exit(1);
+
+      const manualAccountId = await promptText(
+        'Enter your Paser accountId manually:',
+        '',
+        (v) => /^\d+$/.test(v.trim()) || 'Account ID must be a positive integer'
+      );
+      paserAccountId = Number(manualAccountId.trim());
+    }
+
+    draft = {
+      ...draft,
+      step: 4,
+      paser: {
+        baseUrl: paserBaseUrl,
+        email: paserEmail,
+        password: paserPassword,
+        accountId: paserAccountId,
+      },
+    };
+    saveDraft(draft);
+  }
+
+  // ── Step 5: Project Mappings ──────────────────────────────────────────────────
+  printStep(5, TOTAL_STEPS, 'Project Mappings');
   console.log(
     chalk.dim('  Map Jira project keys or exact issue keys to Dyce Customer / Job / Job Task codes.\n')
   );
 
-  let mappings: DyceMapping[] = resuming && draft.step >= 4 && draft.mappings
+  const mappings: DyceMapping[] = resuming && draft.step >= 5 && draft.mappings
     ? draft.mappings
     : [];
 
-  if (resuming && draft.step >= 4 && draft.mappings) {
+  if (resuming && draft.step >= 5 && draft.mappings) {
     printSuccess(`  ${mappings.length} mapping(s) restored from draft`);
   }
 
@@ -468,28 +566,36 @@ export async function runSetup(): Promise<void> {
     addMore = await promptConfirm('Add another project mapping?', false);
   }
 
-  draft = { ...draft, step: 4, mappings };
+  draft = { ...draft, step: 5, mappings };
   saveDraft(draft);
 
-  // ── Step 5: Special Leave / Holiday Detection ───────────────────────────────
-  printStep(5, TOTAL_STEPS, 'Special Leave / Holiday Detection');
+  // ── Step 6: Special Leave / Holiday Detection & Dyce Mappings ───────────────
+  printStep(6, TOTAL_STEPS, 'Special Leave / Holiday Detection');
 
   let vacationPrefixes: string[];
   let publicHolidayDescription: string;
+  let leaveTypeMappings: LeaveTypeMappings = {};
 
-  if (resuming && draft.step >= 5 && draft.vacationPrefixes) {
+  if (resuming && draft.step >= 6 && draft.vacationPrefixes) {
     vacationPrefixes = draft.vacationPrefixes;
     publicHolidayDescription = draft.publicHolidayDescription ?? 'Government approved official holiday';
+    leaveTypeMappings = draft.leaveTypeMappings ?? {};
     printSuccess(`  Vacation prefixes restored: ${vacationPrefixes.join(', ') || '(none)'}`);
   } else {
-    printHint('Worklogs matching these Jira values will be treated as vacation, sick leave, or public holiday.');
-    printHint('During sync you will choose the type for each matching entry.');
-    printHint('Only vacation/sick leave entries require a Paser request ID.');
-    printHint('You can enter full ticket numbers (e.g. INP1-11755) or project prefixes (e.g. INP1).');
-    printHint('Use comma-separated values if needed.');
+    showInfoBox('How Special Leave / Holiday Detection works', [
+      'Step 1 — Jira detection: Enter the Jira ticket numbers or project keys',
+      '         that represent leave (e.g. VAC-1, INP1-11755, or a prefix like VAC).',
+      '         Any Tempo worklog from those tickets is treated as leave.',
+      '',
+      'Step 2 — Dyce targets (this step): Vacation, sick leave, and public holidays',
+      '         are each logged to a DIFFERENT Dyce customer / project / task.',
+      '         You will configure each target separately below.',
+      '',
+      'Important: Do NOT use the same Dyce mapping as your regular work projects!',
+    ]);
 
     const vacationRaw = await promptText(
-      'Special leave/holiday ticket numbers or project prefixes (comma-separated, e.g. INP1-11755,INP1):',
+      'Jira ticket numbers or project key prefixes to treat as leave/holiday\n  (comma-separated, e.g. VAC-1,INP1-11755,VAC):',
       ''
     );
 
@@ -498,23 +604,30 @@ export async function runSetup(): Promise<void> {
       .map((v) => v.trim().toUpperCase())
       .filter((v) => v.length > 0);
 
+    if (vacationPrefixes.length > 0) {
+      printSuccess(`Special leave/holiday identifiers: ${vacationPrefixes.join(', ')}`);
+    }
+
+    console.log();
+    console.log(chalk.bold('  Now configure Dyce targets for each leave type:'));
+    console.log(chalk.dim('  Each leave type is logged to its own Dyce customer / project / task.\n'));
+
+    leaveTypeMappings = await configureLeaveTypeMappings(dyceClient);
+
     publicHolidayDescription = await promptText(
-      'Description to use for government-approved official holidays in Dyce:',
+      '\n  Description to use for public holidays in Dyce (shown in the time entry):',
       'Government approved official holiday',
       (v) => v.trim().length > 0 || 'Description cannot be empty'
     );
 
-    if (vacationPrefixes.length > 0) {
-      printSuccess(`Special leave/holiday values: ${vacationPrefixes.join(', ')}`);
-    }
-    printSuccess(`Public holiday description: ${publicHolidayDescription}`);
+    printSuccess(`Public holiday description: "${publicHolidayDescription}"`);
 
-    draft = { ...draft, step: 5, vacationPrefixes, publicHolidayDescription };
+    draft = { ...draft, step: 6, vacationPrefixes, publicHolidayDescription, leaveTypeMappings };
     saveDraft(draft);
   }
 
-  // ── Step 6: Save ──────────────────────────────────────────────────────────────
-  printStep(6, TOTAL_STEPS, 'Saving Configuration');
+  // ── Step 7: Save ──────────────────────────────────────────────────────────────
+  printStep(7, TOTAL_STEPS, 'Saving Configuration');
 
   const config: Config = {
     tempo: {
@@ -538,8 +651,15 @@ export async function runSetup(): Promise<void> {
       resourceId: dyceResourceId,
       resourceName: dyceResourceName,
     },
+    paser: {
+      baseUrl: paserBaseUrl,
+      email: paserEmail,
+      password: paserPassword,
+      accountId: paserAccountId,
+    },
     mappings,
     vacationPrefixes,
+    leaveTypeMappings: Object.keys(leaveTypeMappings).length > 0 ? leaveTypeMappings : undefined,
     publicHolidayDescription,
   };
 

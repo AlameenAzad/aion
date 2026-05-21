@@ -13,11 +13,13 @@ import {
 } from '../ui/prompts';
 import { DyceMapping } from '../config/schema';
 import { DyceClient } from '../api/dyce';
-import { getDeviceCode, pollForToken, resolveDyceToken, refreshAccessToken } from '../api/msauth';
+import { resolveDyceToken, refreshAccessToken } from '../api/msauth';
 import { withSpinner } from '../ui/spinner';
 import { showInfoBox } from '../ui/banner';
 import { TempoClient, getTempoBaseUrl } from '../api/tempo';
 import { JiraClient } from '../api/jira';
+import { PaserClient } from '../api/paser';
+import { configureLeaveTypeMappings } from '../utils/leaveSetup';
 
 export function runConfigList(): void {
   const config = loadConfig();
@@ -44,6 +46,16 @@ export function runConfigList(): void {
     console.log(`  Resource Name   : ${config.dyce.resourceName}`);
   }
   console.log(`  Token           : ${config.dyce.token ? maskToken(config.dyce.token) : '(will refresh on next use)'}`);
+
+  console.log(chalk.bold('\nPaser:'));
+  if (config.paser) {
+    console.log(`  Base URL        : ${config.paser.baseUrl}`);
+    console.log(`  Email           : ${config.paser.email}`);
+    console.log(`  Password        : ${maskToken(config.paser.password)}`);
+    console.log(`  Account ID      : ${config.paser.accountId}`);
+  } else {
+    console.log(chalk.dim('  (not configured)'));
+  }
 
   console.log(chalk.bold('\nProject Mappings:'));
   if (config.mappings.length === 0) {
@@ -221,20 +233,24 @@ export async function runConfigSetVacation(): Promise<void> {
       ? `  ${config.vacationPrefixes.join(', ')}`
       : chalk.dim('  (none)')
   );
+
+  if (config.leaveTypeMappings) {
+    console.log();
+    console.log(chalk.bold('Current Dyce leave-type mappings:'));
+    for (const [key, m] of Object.entries(config.leaveTypeMappings)) {
+      if (m) {
+        console.log(`  ${key}: ${m.dyce.customerNo} / ${m.dyce.jobNo} / ${m.dyce.jobTaskNo}`);
+      }
+    }
+  }
   console.log();
 
-  printHint('These values can represent vacation, sick leave, or public holiday entries.');
-  printHint('Only vacation/sick leave entries will ask for a Paser ID during sync.');
+  printHint('These Jira values identify leave/holiday worklogs during sync.');
+  printHint('After updating the prefixes you will configure the Dyce target for each leave type.');
 
   const raw = await promptText(
-    'Special leave/holiday ticket numbers or project prefixes (comma-separated, e.g. INP1-11755,INP1):',
+    'Special leave/holiday ticket numbers or project prefixes (comma-separated, e.g. INP1-11755,VAC):',
     config.vacationPrefixes.join(', ')
-  );
-
-  const publicHolidayDescription = await promptText(
-    'Description to use for government-approved official holidays in Dyce:',
-    config.publicHolidayDescription || 'Government approved official holiday',
-    (v) => v.trim().length > 0 || 'Description cannot be empty'
   );
 
   const prefixes = raw
@@ -242,9 +258,34 @@ export async function runConfigSetVacation(): Promise<void> {
     .map((v) => v.trim().toUpperCase())
     .filter((v) => v.length > 0);
 
-  saveConfig({ ...config, vacationPrefixes: prefixes, publicHolidayDescription });
+  const publicHolidayDescription = await promptText(
+    'Description to use for public holidays in Dyce:',
+    config.publicHolidayDescription || 'Government approved official holiday',
+    (v) => v.trim().length > 0 || 'Description cannot be empty'
+  );
+
+  // ── Dyce leave-type mappings ─────────────────────────────────────────────
+  console.log();
+  console.log(chalk.bold('  Configure Dyce targets for each leave type:'));
+  console.log(chalk.dim('  Each leave type is logged to its own Dyce customer / project / task.\n'));
+
+  const dyceToken = await resolveDyceToken(config);
+  const dyceClient = new DyceClient(dyceToken, config.dyce.instance, config.dyce.company);
+
+  const leaveTypeMappings = await configureLeaveTypeMappings(
+    dyceClient,
+    config.leaveTypeMappings ?? {}
+  );
+
+  saveConfig({
+    ...config,
+    vacationPrefixes: prefixes,
+    publicHolidayDescription,
+    leaveTypeMappings: Object.keys(leaveTypeMappings).length > 0 ? leaveTypeMappings : undefined,
+  });
+
   printSuccess(`Special leave/holiday values updated: ${prefixes.join(', ') || '(none)'}`);
-  printSuccess(`Public holiday description updated: ${publicHolidayDescription}`);
+  printSuccess(`Public holiday description: "${publicHolidayDescription}"`);
 }
 
 // ── aion config edit-tempo ────────────────────────────────────────────────────
@@ -327,6 +368,89 @@ export async function runConfigEditJira(): Promise<void> {
   }
 
   printSuccess('Jira credentials updated');
+}
+
+// ── aion config edit-paser ────────────────────────────────────────────────────
+
+export async function runConfigEditPaser(): Promise<void> {
+  const config = loadConfig();
+
+  printStep(1, 1, 'Update Paser credentials');
+
+  const paserBaseUrl = await promptText(
+    'Paser base URL:',
+    config.paser?.baseUrl || 'https://app.paser.io',
+    (v) => {
+      try {
+        new URL(v);
+        return true;
+      } catch {
+        return 'Enter a valid URL';
+      }
+    }
+  );
+
+  const paserEmail = await promptText(
+    'Paser email address:',
+    config.paser?.email || config.jira.email,
+    (v) => (v.includes('@') ? true : 'Enter a valid email')
+  );
+
+  const paserPassword = await promptPassword(
+    'Paser password:',
+    (v) => v.trim().length > 0 || 'Password cannot be empty'
+  );
+
+  let accounts: Array<{ accountId: number; accountName: string }> = [];
+  try {
+    const client = new PaserClient(paserBaseUrl);
+    const auth = await withSpinner('Testing Paser connection…', () =>
+      client.testConnection(paserEmail, paserPassword)
+    );
+    accounts = (auth.user.accounts ?? []).map((a) => ({
+      accountId: a.accountId,
+      accountName: a.accountName,
+    }));
+
+    if (accounts.length === 0) {
+      throw new Error('No Paser accounts were returned for this user.');
+    }
+    printSuccess('Paser connection successful');
+  } catch (err) {
+    printError(`Paser connection failed: ${err instanceof Error ? err.message : String(err)}`);
+    const proceed = await promptConfirm('Save anyway?', false);
+    if (!proceed) return;
+  }
+
+  let accountId = config.paser?.accountId;
+  if (accounts.length === 1) {
+    accountId = accounts[0].accountId;
+  } else if (accounts.length > 1) {
+    const selected = await promptList(
+      'Select Paser account:',
+      accounts.map((a) => ({ name: `${a.accountName} (${a.accountId})`, value: String(a.accountId) }))
+    );
+    accountId = Number(selected);
+  } else if (accountId == null) {
+    const rawAccountId = await promptText(
+      'Paser accountId:',
+      '',
+      (v) => /^\d+$/.test(v.trim()) || 'Account ID must be a positive integer'
+    );
+    accountId = Number(rawAccountId.trim());
+  }
+
+  saveConfig({
+    ...config,
+    paser: {
+      baseUrl: paserBaseUrl,
+      email: paserEmail,
+      password: paserPassword,
+      accountId: accountId!,
+    },
+  });
+
+  printSuccess('Paser credentials updated');
 }
 
 // ── aion config re-auth-dyce ──────────────────────────────────────────────────

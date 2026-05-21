@@ -4,6 +4,12 @@ import { updateConfig } from '../config/manager';
 
 const AUTHORITY = 'https://login.microsoftonline.com/organizations/oauth2/v2.0';
 
+function withCause(message: string, cause: unknown): Error {
+  const error = new Error(message) as Error & { cause?: unknown };
+  error.cause = cause;
+  return error;
+}
+
 export interface DeviceCodeInfo {
   device_code: string;
   user_code: string;
@@ -61,8 +67,9 @@ export async function pollForToken(
         pollInterval += 5;
         continue;
       }
-      throw new Error(
-        (err.response?.data?.error_description as string | undefined) ?? err.message
+      throw withCause(
+        (err.response?.data?.error_description as string | undefined) ?? err.message,
+        err
       );
     }
   }
@@ -103,7 +110,7 @@ export async function refreshAccessToken(
         `\n[msauth debug] HTTP ${err.response.status} response body:\n${JSON.stringify(body, null, 2)}\n\n`
       );
       const description = (body?.error_description as string | undefined) ?? (body?.error as string | undefined);
-      throw new Error(description ?? err.message);
+      throw withCause(description ?? err.message, err);
     }
     throw err;
   }
@@ -138,9 +145,10 @@ export async function resolveDyceToken(config: Config): Promise<string> {
       config.dyce.scope
     );
   } catch (err) {
-    throw new Error(
+    throw withCause(
       `Dyce token refresh failed: ${err instanceof Error ? err.message : String(err)}. ` +
-      'Run `aion setup` to re-authenticate.'
+      'Run `aion setup` to re-authenticate.',
+      err
     );
   }
 
