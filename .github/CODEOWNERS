@@ -1,0 +1,13 @@
+# All source files are owned by the core maintainers by default
+*                   @alameenazad/aion-maintainers
+
+# CI / GitHub config requires explicit maintainer sign-off
+.github/            @alameenazad/aion-maintainers
+
+# API client changes should be reviewed by someone familiar with each API
+src/api/tempo.ts    @alameenazad/aion-maintainers
+src/api/jira.ts     @alameenazad/aion-maintainers
+src/api/dyce.ts     @alameenazad/aion-maintainers
+
+# Security-sensitive: credential storage
+src/config/         @alameenazad/aion-maintainers

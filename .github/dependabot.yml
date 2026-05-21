@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # npm dependencies — weekly, grouped by type
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    # Keep CJS-locked packages pinned — do not auto-bump these
+    ignore:
+      - dependency-name: chalk
+        versions: ['>=5']
+      - dependency-name: ora
+        versions: ['>=6']
+      - dependency-name: inquirer
+        versions: ['>=9']
+      - dependency-name: boxen
+        versions: ['>=6']
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: 'chore(deps)'
+
+  # GitHub Actions — monthly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(ci)'
