@@ -53,7 +53,7 @@ export function runConfigList(): void {
   if (config.paser) {
     console.log(`  Base URL        : ${config.paser.baseUrl}`);
     console.log(`  Email           : ${config.paser.email}`);
-    console.log(`  Password        : ${maskToken(config.paser.password)}`);
+    console.log('  Password        : (configured)');
     console.log(`  Account ID      : ${config.paser.accountId}`);
   } else {
     console.log(chalk.dim('  (not configured)'));
