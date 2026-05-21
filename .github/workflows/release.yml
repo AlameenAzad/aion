@@ -18,18 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - name: Setup Node 22
+      - name: Setup Node 24
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '22.x'
+          node-version: '24.x'  # ships with npm 11, required for Trusted Publishing
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false  # never cache in release builds
-
-      - name: Update npm  # Trusted Publishing requires npm ≥ 11.5.1
-        run: |
-          corepack enable
-          corepack prepare npm@11 --activate
-          npm --version
 
       - name: Install dependencies
         run: npm ci
