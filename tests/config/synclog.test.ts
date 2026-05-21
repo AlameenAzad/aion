@@ -77,6 +77,7 @@ describe('markSynced', () => {
 
     expect(mockedFs.mkdirSync).toHaveBeenCalledWith(expect.stringContaining('.aion'), {
       recursive: true,
+      mode: 0o700,
     });
   });
 

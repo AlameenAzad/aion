@@ -106,9 +106,6 @@ export async function refreshAccessToken(
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response) {
       const body = err.response.data as Record<string, unknown>;
-      process.stderr.write(
-        `\n[msauth debug] HTTP ${err.response.status} response body:\n${JSON.stringify(body, null, 2)}\n\n`
-      );
       const description =
         (body?.error_description as string | undefined) ?? (body?.error as string | undefined);
       throw withCause(description ?? err.message, err);

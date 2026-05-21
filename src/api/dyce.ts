@@ -83,11 +83,6 @@ export class DyceClient {
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response) {
         const body = err.response.data as Record<string, unknown>;
-        process.stderr.write(
-          `\n[dyce debug] HTTP ${err.response.status} on createTimeRecording\n` +
-            `  Request: ${JSON.stringify(recording, null, 2)}\n` +
-            `  Response: ${JSON.stringify(body, null, 2)}\n\n`
-        );
         const message =
           (body?.message as string | undefined) ??
           (body?.error as string | undefined) ??

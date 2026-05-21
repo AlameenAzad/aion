@@ -9,6 +9,7 @@ Thank you for taking the time to contribute! This guide covers everything you ne
 - [Code of conduct](#code-of-conduct)
 - [Getting started](#getting-started)
 - [Development workflow](#development-workflow)
+- [Updating GitHub Actions pins](#updating-github-actions-pins)
 - [Project structure](#project-structure)
 - [Commit messages](#commit-messages)
 - [Pull request process](#pull-request-process)
@@ -71,6 +72,35 @@ Or link it globally for the duration of development:
 npm link
 aion --help
 ```
+
+---
+
+## Updating GitHub Actions pins
+
+Workflow actions are pinned to full commit SHAs in `.github/workflows/*.yml` for supply-chain safety.
+
+When updating an action:
+
+1. Find the latest trusted release/tag in the action repository.
+2. Resolve the tag to a commit SHA.
+3. Replace the `uses:` line with `owner/repo@<sha>` and keep an inline comment with the human-friendly version.
+4. Run CI and open a focused PR (only workflow pin updates).
+
+Example:
+
+```bash
+# Resolve a tag to SHA
+git ls-remote https://github.com/actions/checkout refs/tags/v5
+
+# Then update workflow usage like this:
+# uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+```
+
+Notes:
+
+- Prefer stable release tags over branch heads.
+- Update related actions together when practical (for example checkout/setup-node pairs).
+- Mention the source release notes link in the PR description.
 
 ---
 

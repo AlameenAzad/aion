@@ -1,8 +1,10 @@
 name: CodeQL
 
 on:
-  # Temporarily disabled for automatic runs while the repo is private.
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   actions: read
@@ -21,17 +23,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@78ed0c7291d93e40c51b085850dc669a4c3ab73b # v3
         with:
           languages: ${{ matrix.language }}
           # Use the default security + quality queries
           queries: security-extended,security-and-quality
 
       - name: Setup Node 20
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '20.x'
           cache: npm
@@ -43,6 +45,6 @@ jobs:
         run: npm run build
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@78ed0c7291d93e40c51b085850dc669a4c3ab73b # v3
         with:
           category: /language:${{ matrix.language }}
