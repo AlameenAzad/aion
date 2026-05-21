@@ -110,7 +110,8 @@ Steps:
   [5/7] Project mappings  — Jira project key → Dyce Customer / Job / Job Task
   [6/7] Leave detection   — which Jira tickets mean vacation/leave, then configure a
                             separate Dyce target for Vacation, Sick Leave, and Public Holiday
-  [7/7] Save              — writes ~/.aion/config.json
+  [7/7] Save              — stores tokens in OS Keychain (macOS/Linux/Windows) and
+                            writes non-sensitive settings to ~/.aion/config.json
 ```
 
 Re-run at any time to reconfigure. You can also use `aion config` sub-commands to make targeted changes without going through the full wizard.
@@ -205,22 +206,24 @@ Leave Type Mappings:
 
 ## Configuration file
 
-Config is stored at `~/.aion/config.json`. Tokens are never logged to the terminal (always masked) but are stored in plaintext in this file. Ensure appropriate file permissions on shared machines.
+Non-sensitive settings are stored at `~/.aion/config.json`. Tokens are never logged to the terminal (always masked).
+
+On **macOS, Linux, and Windows**, API tokens and passwords are stored in the OS credential store (macOS Keychain, GNOME Keyring / KWallet, or Windows Credential Manager) and are **omitted from the config file**. On unsupported platforms, tokens fall back to the config file — restrict permissions with `chmod 600 ~/.aion/config.json` in that case.
 
 ```jsonc
 {
   "tempo": {
-    "token": "...",
+    // token stored in OS Keychain (omitted from file when keychain is available)
     "baseUrl": "https://api.eu.tempo.io",
     "accountId": "your-jira-account-id"
   },
   "jira": {
     "baseUrl": "https://yourcompany.atlassian.net",
-    "email": "you@company.com",
-    "token": "..."
+    "email": "you@company.com"
+    // token stored in OS Keychain
   },
   "dyce": {
-    "token": "ey...",
+    // token + refreshToken stored in OS Keychain
     "instance": "your-instance",
     "company": "your-company",
     "resourceNo": "EMP001",
@@ -229,7 +232,7 @@ Config is stored at `~/.aion/config.json`. Tokens are never logged to the termin
   "paser": {
     "baseUrl": "https://app.paser.io",
     "email": "you@company.com",
-    "password": "...",
+    // password stored in OS Keychain
     "accountId": 90
   },
   "mappings": [

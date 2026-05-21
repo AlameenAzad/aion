@@ -22,11 +22,17 @@
     "time-tracking",
     "sync"
   ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "aion": "./dist/index.js"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || true",
+    "prepublishOnly": "npm run lint && npm test && npm run build",
     "build": "tsup",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",

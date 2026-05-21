@@ -102,3 +102,26 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type DyceMapping = z.infer<typeof DyceMappingSchema>;
+
+// ── File-on-disk schema ───────────────────────────────────────────────────────
+// Mirrors ConfigSchema but secret fields are optional: when the OS keychain is
+// in use those values are absent from the JSON file and injected at load time.
+
+export const FileConfigSchema = ConfigSchema.extend({
+  tempo: ConfigSchema.shape.tempo.extend({ token: z.string().optional() }),
+  jira: ConfigSchema.shape.jira.extend({ token: z.string().optional() }),
+  dyce: ConfigSchema.shape.dyce.extend({
+    token: z.string().optional(),
+    refreshToken: z.string().optional(),
+  }),
+  paser: z
+    .object({
+      baseUrl: z.string().url(),
+      email: z.string().email(),
+      password: z.string().optional(),
+      accountId: z.number().int().positive(),
+    })
+    .optional(),
+});
+
+export type FileConfig = z.infer<typeof FileConfigSchema>;
