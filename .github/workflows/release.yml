@@ -22,7 +22,6 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '24.x'  # ships with npm 11, required for Trusted Publishing
-          registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false  # never cache in release builds
 
       - name: Install dependencies
@@ -39,8 +38,6 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ''  # must be empty so OIDC Trusted Publishing takes over
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
