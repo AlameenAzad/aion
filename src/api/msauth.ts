@@ -4,6 +4,12 @@ import { updateConfig } from '../config/manager';
 
 const AUTHORITY = 'https://login.microsoftonline.com/organizations/oauth2/v2.0';
 
+function withCause(message: string, cause: unknown): Error {
+  const error = new Error(message) as Error & { cause?: unknown };
+  error.cause = cause;
+  return error;
+}
+
 export interface DeviceCodeInfo {
   device_code: string;
   user_code: string;
@@ -61,8 +67,9 @@ export async function pollForToken(
         pollInterval += 5;
         continue;
       }
-      throw new Error(
-        (err.response?.data?.error_description as string | undefined) ?? err.message
+      throw withCause(
+        (err.response?.data?.error_description as string | undefined) ?? err.message,
+        err
       );
     }
   }
@@ -88,7 +95,7 @@ export async function refreshAccessToken(
           'Content-Type': 'application/x-www-form-urlencoded',
           // Required for SPA-registered Azure AD apps (AADSTS9002327):
           // refresh tokens issued to SPAs may only be redeemed via cross-origin requests.
-          'Origin': 'https://app.dyce.cloud',
+          Origin: 'https://app.dyce.cloud',
           'Sec-Fetch-Mode': 'cors',
           'Sec-Fetch-Site': 'cross-site',
           'Sec-Fetch-Dest': 'empty',
@@ -99,11 +106,9 @@ export async function refreshAccessToken(
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response) {
       const body = err.response.data as Record<string, unknown>;
-      process.stderr.write(
-        `\n[msauth debug] HTTP ${err.response.status} response body:\n${JSON.stringify(body, null, 2)}\n\n`
-      );
-      const description = (body?.error_description as string | undefined) ?? (body?.error as string | undefined);
-      throw new Error(description ?? err.message);
+      const description =
+        (body?.error_description as string | undefined) ?? (body?.error as string | undefined);
+      throw withCause(description ?? err.message, err);
     }
     throw err;
   }
@@ -112,9 +117,9 @@ export async function refreshAccessToken(
 /** Returns true if the JWT access token is expired or expires within `bufferSeconds`. */
 export function isTokenExpired(token: string, bufferSeconds = 300): boolean {
   try {
-    const payload = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64url').toString()
-    ) as { exp?: number };
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()) as {
+      exp?: number;
+    };
     return !payload.exp || Date.now() / 1000 > payload.exp - bufferSeconds;
   } catch {
     return true;
@@ -138,9 +143,10 @@ export async function resolveDyceToken(config: Config): Promise<string> {
       config.dyce.scope
     );
   } catch (err) {
-    throw new Error(
+    throw withCause(
       `Dyce token refresh failed: ${err instanceof Error ? err.message : String(err)}. ` +
-      'Run `aion setup` to re-authenticate.'
+        'Run `aion setup` to re-authenticate.',
+      err
     );
   }
 

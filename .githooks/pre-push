@@ -1,0 +1,49 @@
+#!/bin/sh
+# Pre-push hook — runs locally before every `git push`.
+# Requires: npm test:coverage ≥90%, lint, type-check, format-check.
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Colour
+
+step() {
+  printf "\n${YELLOW}▶ %s${NC}\n" "$1"
+}
+
+ok() {
+  printf "${GREEN}✔ %s${NC}\n" "$1"
+}
+
+fail() {
+  printf "${RED}✖ %s${NC}\n" "$1"
+  exit 1
+}
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  aion pre-push checks"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+step "Tests + coverage (90% threshold enforced)"
+npm run test:coverage || fail "Tests or coverage threshold failed — push aborted"
+ok "Tests passed"
+
+step "Lint"
+npm run lint || fail "Lint failed — push aborted"
+ok "Lint passed"
+
+step "Type-check"
+npx tsc --noEmit || fail "TypeScript errors found — push aborted"
+ok "Type-check passed"
+
+step "Format check"
+npm run format:check || fail "Formatting issues found — run 'npm run format' to fix"
+ok "Format check passed"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+printf "${GREEN}  All checks passed — pushing ✔${NC}\n"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""

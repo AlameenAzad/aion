@@ -42,6 +42,12 @@ const validConfig: Config = {
     company: 'co1',
     resourceNo: 'EMP01',
   },
+  paser: {
+    baseUrl: 'https://app.paser.io',
+    email: 'user@myco.com',
+    password: 'secret123',
+    accountId: 90,
+  },
   mappings: [],
   vacationPrefixes: [],
 };
@@ -75,6 +81,7 @@ describe('loadConfig', () => {
     const config = loadConfig();
     expect(config.tempo.token).toBe('tempo-abc');
     expect(config.jira.email).toBe('user@myco.com');
+    expect(config.paser?.accountId).toBe(90);
   });
 
   it('throws when the config file does not exist', () => {
@@ -166,7 +173,10 @@ describe('loadDraft', () => {
   });
 
   it('parses and returns the draft when the file exists', () => {
-    const draft: SetupDraft = { step: 2, tempo: { token: 't', baseUrl: 'https://x.io', accountId: 'a' } };
+    const draft: SetupDraft = {
+      step: 2,
+      tempo: { token: 't', baseUrl: 'https://x.io', accountId: 'a' },
+    };
     mockedFs.existsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue(JSON.stringify(draft));
     expect(loadDraft()).toEqual(draft);

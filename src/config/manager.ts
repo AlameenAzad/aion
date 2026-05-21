@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Config, ConfigSchema, DyceMapping } from './schema';
+import { Config, ConfigSchema, DyceMapping, DyceLeaveMapping } from './schema';
 
 const CONFIG_DIR = path.join(os.homedir(), '.aion');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -43,7 +43,10 @@ export function saveConfig(config: Config): void {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
 }
 
 export function updateConfig(partial: Partial<Config>): Config {
@@ -63,7 +66,7 @@ export function maskToken(token: string): string {
 const SETUP_DRAFT_FILE = path.join(CONFIG_DIR, 'setup-draft.json');
 
 export interface SetupDraft {
-  /** Last fully completed step number (1–5) */
+  /** Last fully completed step number (1–6) */
   step: number;
   tempo?: { token: string; baseUrl: string; accountId: string };
   jira?: { baseUrl: string; email: string; token: string };
@@ -78,9 +81,20 @@ export interface SetupDraft {
     resourceId?: string;
     resourceName?: string;
   };
+  paser?: {
+    baseUrl: string;
+    email: string;
+    password: string;
+    accountId: number;
+  };
   mappings?: DyceMapping[];
   vacationPrefixes?: string[];
   publicHolidayDescription?: string;
+  leaveTypeMappings?: {
+    vacation?: DyceLeaveMapping;
+    sickLeave?: DyceLeaveMapping;
+    publicHoliday?: DyceLeaveMapping;
+  };
 }
 
 export function loadDraft(): SetupDraft | null {
@@ -96,7 +110,10 @@ export function saveDraft(draft: SetupDraft): void {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   }
-  fs.writeFileSync(SETUP_DRAFT_FILE, JSON.stringify(draft, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  fs.writeFileSync(SETUP_DRAFT_FILE, JSON.stringify(draft, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
 }
 
 export function clearDraft(): void {

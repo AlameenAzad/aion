@@ -1,24 +1,38 @@
 import { z } from 'zod';
 
+const DyceJobInfoSchema = z.object({
+  customerNo: z.string().min(1),
+  customerId: z.string().optional(),
+  customerName: z.string().optional(),
+  jobNo: z.string().min(1),
+  jobId: z.string().optional(),
+  jobDescription: z.string().optional(),
+  jobTaskNo: z.string().min(1),
+  jobTaskId: z.string().optional(),
+  jobTaskDescription: z.string().optional(),
+  jobPlanningLineId: z.string().optional(),
+  jobPlanningLineDescription: z.string().optional(),
+});
+
 export const DyceMappingSchema = z.object({
   /** Jira project key prefix, e.g. "PROJ" */
   jiraProjectKey: z.string().min(1),
   /** Human-readable label for this mapping */
   label: z.string().optional(),
-  dyce: z.object({
-    customerNo: z.string().min(1),
-    customerId: z.string().optional(),
-    customerName: z.string().optional(),
-    jobNo: z.string().min(1),
-    jobId: z.string().optional(),
-    jobDescription: z.string().optional(),
-    jobTaskNo: z.string().min(1),
-    jobTaskId: z.string().optional(),
-    jobTaskDescription: z.string().optional(),
-    jobPlanningLineId: z.string().optional(),
-    jobPlanningLineDescription: z.string().optional(),
-  }),
+  dyce: DyceJobInfoSchema,
 });
+
+/**
+ * Dyce destination for a specific leave type (no Jira key needed — the leave
+ * type is determined during sync by the user's selection).
+ */
+export const DyceLeaveMappingSchema = z.object({
+  /** Human-readable label, e.g. "Vacation Account" */
+  label: z.string().optional(),
+  dyce: DyceJobInfoSchema,
+});
+
+export type DyceLeaveMapping = z.infer<typeof DyceLeaveMappingSchema>;
 
 export const ConfigSchema = z.object({
   tempo: z.object({
@@ -53,10 +67,35 @@ export const ConfigSchema = z.object({
     resourceId: z.string().optional(),
     resourceName: z.string().optional(),
   }),
+  paser: z
+    .object({
+      /** Paser base URL, e.g. "https://app.paser.io" */
+      baseUrl: z.string().url(),
+      email: z.string().email(),
+      password: z.string().min(1),
+      /** Paser account id, e.g. 90 */
+      accountId: z.number().int().positive(),
+    })
+    .optional(),
   /** Per-project mappings from Jira project key → Dyce job info */
   mappings: z.array(DyceMappingSchema),
   /** Jira project key prefixes that indicate vacation/sick leave, e.g. ["VAC", "LEAVE"] */
   vacationPrefixes: z.array(z.string()),
+  /**
+   * Dyce destinations for each leave type.
+   * These are separate from the regular per-project mappings and take precedence
+   * when a worklog is classified as a leave/holiday entry during sync.
+   */
+  leaveTypeMappings: z
+    .object({
+      /** Where to log vacation days in Dyce */
+      vacation: DyceLeaveMappingSchema.optional(),
+      /** Where to log sick leave days in Dyce */
+      sickLeave: DyceLeaveMappingSchema.optional(),
+      /** Where to log public / bank holidays in Dyce */
+      publicHoliday: DyceLeaveMappingSchema.optional(),
+    })
+    .optional(),
   /** Description to send to Dyce for government-approved official public holidays */
   publicHolidayDescription: z.string().optional(),
 });

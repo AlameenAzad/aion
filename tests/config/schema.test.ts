@@ -1,4 +1,4 @@
-import { ConfigSchema, DyceMappingSchema } from '../../src/config/schema';
+import { ConfigSchema, DyceMappingSchema, DyceLeaveMappingSchema } from '../../src/config/schema';
 
 const validMapping = {
   jiraProjectKey: 'PROJ',
@@ -28,6 +28,12 @@ const validConfig = {
     instance: 'my-instance',
     company: 'my-company',
     resourceNo: 'EMP001',
+  },
+  paser: {
+    baseUrl: 'https://app.paser.io',
+    email: 'dev@company.com',
+    password: 'secret123',
+    accountId: 90,
   },
   mappings: [validMapping],
   vacationPrefixes: ['VAC', 'SICK'],
@@ -78,6 +84,11 @@ describe('ConfigSchema', () => {
 
   it('accepts config with no mappings', () => {
     const cfg = { ...validConfig, mappings: [] };
+    expect(ConfigSchema.safeParse(cfg).success).toBe(true);
+  });
+
+  it('accepts config without Paser credentials', () => {
+    const { paser: _, ...cfg } = validConfig;
     expect(ConfigSchema.safeParse(cfg).success).toBe(true);
   });
 
@@ -145,6 +156,16 @@ describe('ConfigSchema', () => {
     expect(ConfigSchema.safeParse(bad).success).toBe(false);
   });
 
+  it('rejects invalid Paser baseUrl', () => {
+    const bad = { ...validConfig, paser: { ...validConfig.paser, baseUrl: 'not-url' } };
+    expect(ConfigSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects invalid Paser email', () => {
+    const bad = { ...validConfig, paser: { ...validConfig.paser, email: 'invalid' } };
+    expect(ConfigSchema.safeParse(bad).success).toBe(false);
+  });
+
   it('strips unknown fields (Zod default strip behavior)', () => {
     const withExtra = { ...validConfig, unexpectedField: 'should be stripped' };
     const result = ConfigSchema.safeParse(withExtra);
@@ -152,5 +173,53 @@ describe('ConfigSchema', () => {
     if (result.success) {
       expect((result.data as Record<string, unknown>).unexpectedField).toBeUndefined();
     }
+  });
+
+  it('accepts config with leaveTypeMappings', () => {
+    const cfg = {
+      ...validConfig,
+      leaveTypeMappings: {
+        vacation: {
+          label: 'Annual Leave',
+          dyce: { customerNo: 'C001', jobNo: 'J-VAC', jobTaskNo: 'T-VAC' },
+        },
+        sickLeave: { dyce: { customerNo: 'C001', jobNo: 'J-SICK', jobTaskNo: 'T-SICK' } },
+        publicHoliday: { dyce: { customerNo: 'C001', jobNo: 'J-HOL', jobTaskNo: 'T-HOL' } },
+      },
+    };
+    expect(ConfigSchema.safeParse(cfg).success).toBe(true);
+  });
+
+  it('accepts config with partial leaveTypeMappings (only vacation)', () => {
+    const cfg = {
+      ...validConfig,
+      leaveTypeMappings: {
+        vacation: { dyce: { customerNo: 'C001', jobNo: 'J-VAC', jobTaskNo: 'T-VAC' } },
+      },
+    };
+    expect(ConfigSchema.safeParse(cfg).success).toBe(true);
+  });
+
+  it('accepts config without leaveTypeMappings (backward-compatible)', () => {
+    expect(ConfigSchema.safeParse(validConfig).success).toBe(true);
+  });
+});
+
+// ── DyceLeaveMappingSchema ────────────────────────────────────────────────────
+
+describe('DyceLeaveMappingSchema', () => {
+  it('accepts a minimal leave mapping', () => {
+    const m = { dyce: { customerNo: 'C001', jobNo: 'J001', jobTaskNo: 'T001' } };
+    expect(DyceLeaveMappingSchema.safeParse(m).success).toBe(true);
+  });
+
+  it('accepts an optional label', () => {
+    const m = { label: 'Vacation', dyce: { customerNo: 'C001', jobNo: 'J001', jobTaskNo: 'T001' } };
+    expect(DyceLeaveMappingSchema.safeParse(m).success).toBe(true);
+  });
+
+  it('rejects a missing customerNo', () => {
+    const bad = { dyce: { jobNo: 'J001', jobTaskNo: 'T001' } };
+    expect(DyceLeaveMappingSchema.safeParse(bad).success).toBe(false);
   });
 });

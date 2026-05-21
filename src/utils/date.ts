@@ -59,7 +59,9 @@ export function getLocalOffset(): string {
   const offsetMinutes = -new Date().getTimezoneOffset();
   const sign = offsetMinutes >= 0 ? '+' : '-';
   const abs = Math.abs(offsetMinutes);
-  const hh = Math.floor(abs / 60).toString().padStart(2, '0');
+  const hh = Math.floor(abs / 60)
+    .toString()
+    .padStart(2, '0');
   const mm = (abs % 60).toString().padStart(2, '0');
   return `${sign}${hh}:${mm}`;
 }
