@@ -45,7 +45,9 @@ export function runConfigList(): void {
   if (config.dyce.resourceName) {
     console.log(`  Resource Name   : ${config.dyce.resourceName}`);
   }
-  console.log(`  Token           : ${config.dyce.token ? maskToken(config.dyce.token) : '(will refresh on next use)'}`);
+  console.log(
+    `  Token           : ${config.dyce.token ? maskToken(config.dyce.token) : '(will refresh on next use)'}`
+  );
 
   console.log(chalk.bold('\nPaser:'));
   if (config.paser) {
@@ -107,7 +109,7 @@ export async function runConfigAddMapping(): Promise<void> {
   if (existingCount > 0) {
     printHint(
       `${existingCount} mapping(s) already exist for ${jiraProjectKey.toUpperCase()}. ` +
-      'This new mapping will be added as an additional option.'
+        'This new mapping will be added as an additional option.'
     );
   }
 
@@ -159,7 +161,9 @@ export async function runConfigAddMapping(): Promise<void> {
   let jobTaskId: string | undefined;
   let jobTaskDescription: string | undefined;
 
-  const jobTasks = await withSpinner('Fetching Dyce project tasks…', () => dyceClient.listJobTasks(jobId));
+  const jobTasks = await withSpinner('Fetching Dyce project tasks…', () =>
+    dyceClient.listJobTasks(jobId)
+  );
   if (jobTasks.length > 0) {
     const choices = jobTasks.map((t) => ({
       name: `${t.no}${t.description ? ` — ${t.description}` : ''}`,
@@ -171,7 +175,9 @@ export async function runConfigAddMapping(): Promise<void> {
     jobTaskDescription = sel?.description;
   } else {
     printWarning('Could not fetch project tasks — enter the No manually.');
-    printHint('Open DevTools → Network → /api/resourceJobAssignments/JobTasks response → copy the "no" value.');
+    printHint(
+      'Open DevTools → Network → /api/resourceJobAssignments/JobTasks response → copy the "no" value.'
+    );
     dyceJobTaskNo = await promptText('Dyce Job Task No:');
   }
 
@@ -179,9 +185,8 @@ export async function runConfigAddMapping(): Promise<void> {
   let jobPlanningLineId: string | undefined;
   let jobPlanningLineDescription: string | undefined;
   if (jobTaskId) {
-    const planningLines = await withSpinner(
-      'Fetching Dyce job planning lines…',
-      () => dyceClient.listJobPlanningLines(jobTaskId!)
+    const planningLines = await withSpinner('Fetching Dyce job planning lines…', () =>
+      dyceClient.listJobPlanningLines(jobTaskId!)
     );
     if (planningLines.length === 1) {
       jobPlanningLineId = planningLines[0].id;
@@ -267,7 +272,9 @@ export async function runConfigSetVacation(): Promise<void> {
   // ── Dyce leave-type mappings ─────────────────────────────────────────────
   console.log();
   console.log(chalk.bold('  Configure Dyce targets for each leave type:'));
-  console.log(chalk.dim('  Each leave type is logged to its own Dyce customer / project / task.\n'));
+  console.log(
+    chalk.dim('  Each leave type is logged to its own Dyce customer / project / task.\n')
+  );
 
   const dyceToken = await resolveDyceToken(config);
   const dyceClient = new DyceClient(dyceToken, config.dyce.instance, config.dyce.company);
@@ -332,18 +339,17 @@ export async function runConfigEditJira(): Promise<void> {
   printStep(1, 1, 'Update Jira credentials');
   printHint('Get your Jira API token: https://id.atlassian.com/manage-profile/security/api-tokens');
 
-  const jiraBaseUrl = await promptText(
-    'Jira base URL:',
-    config.jira.baseUrl,
-    (v) => {
-      try { new URL(v); return true; } catch { return 'Enter a valid URL'; }
+  const jiraBaseUrl = await promptText('Jira base URL:', config.jira.baseUrl, (v) => {
+    try {
+      new URL(v);
+      return true;
+    } catch {
+      return 'Enter a valid URL';
     }
-  );
+  });
 
-  const jiraEmail = await promptText(
-    'Jira email address:',
-    config.jira.email,
-    (v) => v.includes('@') ? true : 'Enter a valid email'
+  const jiraEmail = await promptText('Jira email address:', config.jira.email, (v) =>
+    v.includes('@') ? true : 'Enter a valid email'
   );
 
   const jiraToken = await promptPassword(
@@ -428,7 +434,10 @@ export async function runConfigEditPaser(): Promise<void> {
   } else if (accounts.length > 1) {
     const selected = await promptList(
       'Select Paser account:',
-      accounts.map((a) => ({ name: `${a.accountName} (${a.accountId})`, value: String(a.accountId) }))
+      accounts.map((a) => ({
+        name: `${a.accountName} (${a.accountId})`,
+        value: String(a.accountId),
+      }))
     );
     accountId = Number(selected);
   } else if (accountId == null) {
@@ -491,9 +500,8 @@ export async function runConfigReAuthDyce(): Promise<void> {
   let refreshToken: string;
 
   try {
-    const tokenData = await withSpinner(
-      'Verifying Dyce credentials…',
-      () => refreshAccessToken(dyceClientId, pastedRefreshToken, effectiveScope)
+    const tokenData = await withSpinner('Verifying Dyce credentials…', () =>
+      refreshAccessToken(dyceClientId, pastedRefreshToken, effectiveScope)
     );
 
     accessToken = tokenData.access_token;

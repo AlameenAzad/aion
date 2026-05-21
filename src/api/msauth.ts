@@ -95,7 +95,7 @@ export async function refreshAccessToken(
           'Content-Type': 'application/x-www-form-urlencoded',
           // Required for SPA-registered Azure AD apps (AADSTS9002327):
           // refresh tokens issued to SPAs may only be redeemed via cross-origin requests.
-          'Origin': 'https://app.dyce.cloud',
+          Origin: 'https://app.dyce.cloud',
           'Sec-Fetch-Mode': 'cors',
           'Sec-Fetch-Site': 'cross-site',
           'Sec-Fetch-Dest': 'empty',
@@ -109,7 +109,8 @@ export async function refreshAccessToken(
       process.stderr.write(
         `\n[msauth debug] HTTP ${err.response.status} response body:\n${JSON.stringify(body, null, 2)}\n\n`
       );
-      const description = (body?.error_description as string | undefined) ?? (body?.error as string | undefined);
+      const description =
+        (body?.error_description as string | undefined) ?? (body?.error as string | undefined);
       throw withCause(description ?? err.message, err);
     }
     throw err;
@@ -119,9 +120,9 @@ export async function refreshAccessToken(
 /** Returns true if the JWT access token is expired or expires within `bufferSeconds`. */
 export function isTokenExpired(token: string, bufferSeconds = 300): boolean {
   try {
-    const payload = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64url').toString()
-    ) as { exp?: number };
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()) as {
+      exp?: number;
+    };
     return !payload.exp || Date.now() / 1000 > payload.exp - bufferSeconds;
   } catch {
     return true;
@@ -147,7 +148,7 @@ export async function resolveDyceToken(config: Config): Promise<string> {
   } catch (err) {
     throw withCause(
       `Dyce token refresh failed: ${err instanceof Error ? err.message : String(err)}. ` +
-      'Run `aion setup` to re-authenticate.',
+        'Run `aion setup` to re-authenticate.',
       err
     );
   }

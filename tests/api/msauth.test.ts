@@ -95,7 +95,9 @@ describe('getDeviceCode', () => {
     expect(mockedAxios.post).toHaveBeenCalledWith(
       expect.stringContaining('/devicecode'),
       expect.any(URLSearchParams),
-      expect.objectContaining({ headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }) })
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+      })
     );
     expect(result.user_code).toBe('ABC123');
     expect(result.interval).toBe(5);
@@ -157,7 +159,51 @@ describe('pollForToken', () => {
     expect(mockedAxios.post).toHaveBeenCalledTimes(2);
   });
 
-  it('throws on a non-pending error', async () => {
+  it('increases the poll interval on slow_down and then succeeds', async () => {
+    const slowDownError = Object.assign(new Error('slow_down'), {
+      isAxiosError: true,
+      response: { data: { error: 'slow_down' } },
+    });
+    const tokenResponse = {
+      access_token: 'access-ok',
+      refresh_token: 'refresh-ok',
+      expires_in: 3600,
+      token_type: 'Bearer',
+    };
+
+    mockedAxios.isAxiosError.mockReturnValue(true);
+    mockedAxios.post
+      .mockRejectedValueOnce(slowDownError)
+      .mockResolvedValueOnce({ data: tokenResponse });
+
+    const promise = pollForToken('client-id', 'device-code', 1);
+    await jest.advanceTimersByTimeAsync(1100); // first sleep
+    await jest.advanceTimersByTimeAsync(6100); // second sleep (interval bumped to 6s)
+    const result = await promise;
+
+    expect(result.access_token).toBe('access-ok');
+    expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws a timeout error when the deadline is exceeded', async () => {
+    const pendingError = Object.assign(new Error('pending'), {
+      isAxiosError: true,
+      response: { data: { error: 'authorization_pending' } },
+    });
+    mockedAxios.isAxiosError.mockReturnValue(true);
+    mockedAxios.post.mockRejectedValue(pendingError);
+
+    // deadline = 500ms; sleep interval = 1s; after 1100ms fake time the sleep
+    // resolves, post throws authorization_pending, loop re-checks deadline
+    // (1100 > 500) and exits, throwing the "timed out" error.
+    const promise = pollForToken('client-id', 'device-code', 1, 500);
+    // Attach rejection handler BEFORE advancing timers to avoid unhandled rejection warning.
+    const assertion = expect(promise).rejects.toThrow('timed out');
+    await jest.advanceTimersByTimeAsync(1100);
+    await assertion;
+  });
+
+  it('throws on a non-pending error (with error_description)', async () => {
     const authError = Object.assign(new Error('access_denied'), {
       isAxiosError: true,
       response: { data: { error: 'access_denied', error_description: 'User denied access' } },
@@ -167,8 +213,22 @@ describe('pollForToken', () => {
     mockedAxios.post.mockRejectedValueOnce(authError);
 
     const promise = pollForToken('client-id', 'device-code', 1);
-    // Attach the rejection handler BEFORE advancing timers to avoid unhandled rejection warning
     const assertion = expect(promise).rejects.toThrow('User denied access');
+    await jest.advanceTimersByTimeAsync(1100);
+    await assertion;
+  });
+
+  it('uses err.message as fallback when error_description is absent', async () => {
+    const authError = Object.assign(new Error('invalid_request'), {
+      isAxiosError: true,
+      response: { data: { error: 'invalid_request' } },
+    });
+
+    mockedAxios.isAxiosError.mockReturnValue(true);
+    mockedAxios.post.mockRejectedValueOnce(authError);
+
+    const promise = pollForToken('client-id', 'device-code', 1);
+    const assertion = expect(promise).rejects.toThrow('invalid_request');
     await jest.advanceTimersByTimeAsync(1100);
     await assertion;
   });
@@ -202,6 +262,51 @@ describe('refreshAccessToken', () => {
   });
 });
 
+// ── refreshAccessToken (HTTP error body) ─────────────────────────────────────
+
+describe('refreshAccessToken (HTTP error handling)', () => {
+  it('extracts error_description from the response body', async () => {
+    const axiosError = Object.assign(new Error('invalid_grant'), {
+      isAxiosError: true,
+      response: {
+        status: 400,
+        data: {
+          error: 'invalid_grant',
+          error_description: 'AADSTS70008: The provided refresh token has expired.',
+        },
+      },
+    });
+    mockedAxios.isAxiosError.mockReturnValue(true);
+    mockedAxios.post.mockRejectedValueOnce(axiosError);
+
+    await expect(refreshAccessToken('client-id', 'bad-refresh', 'api://scope')).rejects.toThrow(
+      'AADSTS70008: The provided refresh token has expired.'
+    );
+  });
+
+  it('falls back to error field when error_description is absent', async () => {
+    const axiosError = Object.assign(new Error('unauthorized_client'), {
+      isAxiosError: true,
+      response: { status: 401, data: { error: 'unauthorized_client' } },
+    });
+    mockedAxios.isAxiosError.mockReturnValue(true);
+    mockedAxios.post.mockRejectedValueOnce(axiosError);
+
+    await expect(refreshAccessToken('client-id', 'bad-refresh', 'api://scope')).rejects.toThrow(
+      'unauthorized_client'
+    );
+  });
+
+  it('rethrows non-axios errors as-is', async () => {
+    mockedAxios.isAxiosError.mockReturnValue(false);
+    mockedAxios.post.mockRejectedValueOnce(new Error('Network failure'));
+
+    await expect(refreshAccessToken('client-id', 'refresh', 'api://scope')).rejects.toThrow(
+      'Network failure'
+    );
+  });
+});
+
 // ── resolveDyceToken ──────────────────────────────────────────────────────────
 
 describe('resolveDyceToken', () => {
@@ -222,7 +327,12 @@ describe('resolveDyceToken', () => {
     const config = { ...validConfig, dyce: { ...validConfig.dyce, token: expiredToken } };
 
     mockedAxios.post.mockResolvedValueOnce({
-      data: { access_token: newToken, refresh_token: 'new-refresh', expires_in: 3600, token_type: 'Bearer' },
+      data: {
+        access_token: newToken,
+        refresh_token: 'new-refresh',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      },
     });
 
     const result = await resolveDyceToken(config);
@@ -241,7 +351,12 @@ describe('resolveDyceToken', () => {
     const config = { ...validConfig, dyce: { ...dyceWithout } } as Config;
 
     mockedAxios.post.mockResolvedValueOnce({
-      data: { access_token: newToken, refresh_token: 'new-refresh', expires_in: 3600, token_type: 'Bearer' },
+      data: {
+        access_token: newToken,
+        refresh_token: 'new-refresh',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      },
     });
 
     const result = await resolveDyceToken(config);

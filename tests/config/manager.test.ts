@@ -173,7 +173,10 @@ describe('loadDraft', () => {
   });
 
   it('parses and returns the draft when the file exists', () => {
-    const draft: SetupDraft = { step: 2, tempo: { token: 't', baseUrl: 'https://x.io', accountId: 'a' } };
+    const draft: SetupDraft = {
+      step: 2,
+      tempo: { token: 't', baseUrl: 'https://x.io', accountId: 'a' },
+    };
     mockedFs.existsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue(JSON.stringify(draft));
     expect(loadDraft()).toEqual(draft);

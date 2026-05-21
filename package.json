@@ -26,6 +26,7 @@
     "aion": "./dist/index.js"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "build": "tsup",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",

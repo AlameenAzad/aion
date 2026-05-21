@@ -6,7 +6,13 @@ import { JiraClient } from '../api/jira';
 import { PaserClient } from '../api/paser';
 import { DyceClient, DyceTimeRecording } from '../api/dyce';
 import { resolveDyceToken } from '../api/msauth';
-import { getDateRange, DateFlags, buildIsoDatetime, secondsToMinutes, timeToSeconds } from '../utils/date';
+import {
+  getDateRange,
+  DateFlags,
+  buildIsoDatetime,
+  secondsToMinutes,
+  timeToSeconds,
+} from '../utils/date';
 import { findMappings, isVacationEntry } from '../utils/mapping';
 import {
   ParsedPaserCase,
@@ -39,9 +45,9 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   console.log();
   console.log(
     chalk.bold(`${isDryRun ? 'Preview' : 'Syncing'} worklogs from `) +
-    chalk.cyan(from) +
-    chalk.bold(' to ') +
-    chalk.cyan(to)
+      chalk.cyan(from) +
+      chalk.bold(' to ') +
+      chalk.cyan(to)
   );
 
   const syncedIds = loadSyncedIds();
@@ -268,7 +274,9 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   for (const item of toSync) {
     if (isVacationEntry(item.issueKey, config.vacationPrefixes)) {
       console.log();
-      printWarning(`Special leave/holiday entry detected: ${item.issueKey} on ${item.worklog.startDate}`);
+      printWarning(
+        `Special leave/holiday entry detected: ${item.issueKey} on ${item.worklog.startDate}`
+      );
 
       const specialEntryType = await promptList('  What type of entry is this?', [
         { name: 'Vacation (annual leave — requires Paser ID)', value: 'vacation' as const },
@@ -285,7 +293,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         console.log(
           chalk.dim(
             `  Using ${specialEntryType} mapping → ` +
-            `${dedicatedLeaveMapping.dyce.customerNo} / ${dedicatedLeaveMapping.dyce.jobNo} / ${dedicatedLeaveMapping.dyce.jobTaskNo}`
+              `${dedicatedLeaveMapping.dyce.customerNo} / ${dedicatedLeaveMapping.dyce.jobNo} / ${dedicatedLeaveMapping.dyce.jobTaskNo}`
           )
         );
       } else if (item.mappingCandidates.length > 1) {
@@ -302,7 +310,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         if (!dedicatedLeaveMapping) {
           printWarning(
             `  No dedicated ${specialEntryType} mapping configured — falling back to regular project mapping.\n` +
-            `  Run \`aion setup\` and reconfigure Step 6 to set a dedicated ${specialEntryType} Dyce target.`
+              `  Run \`aion setup\` and reconfigure Step 6 to set a dedicated ${specialEntryType} Dyce target.`
           );
         }
       }
@@ -317,7 +325,9 @@ export async function runSync(opts: SyncOptions): Promise<void> {
               `Matched request #${selected.id} is not approved/completed (state: ${selected.state || 'n/a'}, stage: ${selected.stage || 'n/a'})`
             );
           }
-          console.log(chalk.dim(`  Auto-matched Paser request #${selected.id} (${selected.title})`));
+          console.log(
+            chalk.dim(`  Auto-matched Paser request #${selected.id} (${selected.title})`)
+          );
           paserMap.set(item.worklog.tempoWorklogId, `#${selected.id}`);
         } else if (matchedCases.length > 1) {
           printWarning(
@@ -347,7 +357,8 @@ export async function runSync(opts: SyncOptions): Promise<void> {
           const paserId = await promptText(
             `  Enter Paser.io request ID for this entry (e.g. #23234):`,
             '',
-            (v) => v.trim().length > 0 || 'Paser request ID is required for vacation/sick leave entries'
+            (v) =>
+              v.trim().length > 0 || 'Paser request ID is required for vacation/sick leave entries'
           );
           paserMap.set(item.worklog.tempoWorklogId, paserId.trim());
         }
@@ -383,7 +394,8 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     const mapping = item.selectedMapping ?? item.mappingCandidates[0]!;
     const summary = issueSummaryMap.get(issueKey) ?? worklog.description ?? '';
     const isSpecialEntry = isVacationEntry(issueKey, config.vacationPrefixes);
-    const needsPaserId = item.specialEntryType === 'vacation' || item.specialEntryType === 'sickLeave';
+    const needsPaserId =
+      item.specialEntryType === 'vacation' || item.specialEntryType === 'sickLeave';
     const paserId = paserMap.get(worklog.tempoWorklogId);
 
     // Build description
@@ -392,7 +404,8 @@ export async function runSync(opts: SyncOptions): Promise<void> {
       // For vacation/sick-leave entries the Dyce description should be only the Paser request id.
       description = paserId;
     } else if (item.specialEntryType === 'publicHoliday') {
-      description = config.publicHolidayDescription?.trim() || 'Government approved official holiday';
+      description =
+        config.publicHolidayDescription?.trim() || 'Government approved official holiday';
     }
 
     const startIso = buildIsoDatetime(worklog.startDate, worklog.startTime);

@@ -24,7 +24,9 @@ export function findMappings(issueKey: string, mappings: DyceMapping[]): DyceMap
   const projectKey = extractProjectKey(normalizedIssueKey);
 
   // Prefer exact issue-key mappings (e.g. INP1-11755) over project-prefix mappings (e.g. INP1).
-  const exact = mappings.filter((m) => m.jiraProjectKey.trim().toUpperCase() === normalizedIssueKey);
+  const exact = mappings.filter(
+    (m) => m.jiraProjectKey.trim().toUpperCase() === normalizedIssueKey
+  );
   if (exact.length > 0) return exact;
 
   return mappings.filter((m) => m.jiraProjectKey.trim().toUpperCase() === projectKey);

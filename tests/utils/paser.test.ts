@@ -31,6 +31,11 @@ describe('parseDateRangeFromTitle', () => {
   it('returns null for unparseable title', () => {
     expect(parseDateRangeFromTitle('Vacation, User')).toBeNull();
   });
+
+  it('returns null when day component is zero (invalid date part)', () => {
+    // "00" parses to 0 which is falsy — triggers the !day guard
+    expect(parseDateRangeFromTitle('X (00.01.2026 - 01.01.2026)')).toBeNull();
+  });
 });
 
 describe('parsePaserCase', () => {
@@ -67,6 +72,15 @@ describe('findCasesMatchingDate', () => {
     expect(findCasesMatchingDate(cases, '2026-05-01')).toHaveLength(1);
     expect(findCasesMatchingDate(cases, '2026-05-03')).toHaveLength(1);
     expect(findCasesMatchingDate(cases, '2026-05-04')).toHaveLength(0);
+  });
+
+  it('returns empty array for an invalid target date', () => {
+    expect(findCasesMatchingDate([], 'not-a-date')).toEqual([]);
+  });
+
+  it('skips cases where from or to is not a valid date string', () => {
+    const cases = [{ id: 1, title: 'X', leaveType: 'vacation' as const, from: 'bad', to: 'bad' }];
+    expect(findCasesMatchingDate(cases, '2026-05-01')).toHaveLength(0);
   });
 });
 

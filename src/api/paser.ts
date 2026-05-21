@@ -52,7 +52,10 @@ export class PaserClient {
     this.client.defaults.headers.common.Cookie = cookie;
   }
 
-  async authenticate(email: string, password: string): Promise<{ user: PaserUser; sessionCookie?: string }> {
+  async authenticate(
+    email: string,
+    password: string
+  ): Promise<{ user: PaserUser; sessionCookie?: string }> {
     const res = await this.client.post<PaserUser>('/api/user/authenticate/', { email, password });
     const sessionCookie = this.extractSessionCookie(res.headers['set-cookie']);
 
@@ -83,17 +86,20 @@ export class PaserClient {
     const folderId = params.folderId ?? 'sent';
 
     for (let page = 1; page <= maxPages; page++) {
-      const res = await this.client.get<PaserCase[] | PaserCasesResponse>(`/api/${params.accountId}/cases/`, {
-        params: {
-          folderId,
-          sb: 'CreatedAt',
-          sd: 'desc',
-          pg: page,
-          ps: pageSize,
-          from: params.from,
-          to: params.to,
-        },
-      });
+      const res = await this.client.get<PaserCase[] | PaserCasesResponse>(
+        `/api/${params.accountId}/cases/`,
+        {
+          params: {
+            folderId,
+            sb: 'CreatedAt',
+            sd: 'desc',
+            pg: page,
+            ps: pageSize,
+            from: params.from,
+            to: params.to,
+          },
+        }
+      );
 
       const pageItems = this.normalizeCasesResponse(res.data);
       results.push(...pageItems);
@@ -104,7 +110,10 @@ export class PaserClient {
     return results;
   }
 
-  async testConnection(email: string, password: string): Promise<{ user: PaserUser; sessionCookie?: string }> {
+  async testConnection(
+    email: string,
+    password: string
+  ): Promise<{ user: PaserUser; sessionCookie?: string }> {
     const auth = await this.authenticate(email, password);
     const fallbackAccount = auth.user.accounts?.[0]?.accountId;
 

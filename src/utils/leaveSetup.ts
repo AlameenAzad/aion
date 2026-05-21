@@ -1,11 +1,5 @@
 import chalk from 'chalk';
-import {
-  promptText,
-  promptList,
-  promptConfirm,
-  printSuccess,
-  printWarning,
-} from '../ui/prompts';
+import { promptText, promptList, promptConfirm, printSuccess, printWarning } from '../ui/prompts';
 import { withSpinner } from '../ui/spinner';
 import { DyceClient } from '../api/dyce';
 import { DyceLeaveMapping } from '../config/schema';
@@ -21,22 +15,22 @@ const LEAVE_TYPES: Array<{
   label: string;
   hint: string;
 }> = [
-    {
-      key: 'vacation',
-      label: 'Vacation',
-      hint: 'Where are annual leave / vacation days logged in Dyce?',
-    },
-    {
-      key: 'sickLeave',
-      label: 'Sick Leave',
-      hint: 'Where are sick days logged in Dyce?',
-    },
-    {
-      key: 'publicHoliday',
-      label: 'Public / Bank Holiday',
-      hint: 'Where are government-approved public holidays logged in Dyce?',
-    },
-  ];
+  {
+    key: 'vacation',
+    label: 'Vacation',
+    hint: 'Where are annual leave / vacation days logged in Dyce?',
+  },
+  {
+    key: 'sickLeave',
+    label: 'Sick Leave',
+    hint: 'Where are sick days logged in Dyce?',
+  },
+  {
+    key: 'publicHoliday',
+    label: 'Public / Bank Holiday',
+    hint: 'Where are government-approved public holidays logged in Dyce?',
+  },
+];
 
 /**
  * Interactive wizard that asks the user to configure a Dyce customer/job/task
@@ -188,9 +182,7 @@ export async function configureLeaveTypeMappings(
       },
     };
 
-    printSuccess(
-      `  ${leaveType.label} → ${dyceCustomerNo} / ${dyceJobNo} / ${dyceJobTaskNo}`
-    );
+    printSuccess(`  ${leaveType.label} → ${dyceCustomerNo} / ${dyceJobNo} / ${dyceJobTaskNo}`);
   }
 
   return result;

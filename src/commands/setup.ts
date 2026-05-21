@@ -18,7 +18,7 @@ import { PaserClient } from '../api/paser';
 import { DyceClient } from '../api/dyce';
 import { refreshAccessToken } from '../api/msauth';
 import { saveConfig, loadDraft, saveDraft, clearDraft, SetupDraft } from '../config/manager';
-import { Config, DyceMapping, DyceLeaveMapping } from '../config/schema';
+import { Config, DyceMapping } from '../config/schema';
 import { configureLeaveTypeMappings, LeaveTypeMappings } from '../utils/leaveSetup';
 
 /** Safely decode a URL-encoded string (e.g. "My%20Company" → "My Company"). */
@@ -36,7 +36,9 @@ export async function runSetup(): Promise<void> {
   showBanner();
 
   console.log(chalk.bold('Welcome to aion setup!'));
-  console.log(chalk.dim('This wizard will configure your Tempo, Jira, Paser, and Dyce credentials.\n'));
+  console.log(
+    chalk.dim('This wizard will configure your Tempo, Jira, Paser, and Dyce credentials.\n')
+  );
 
   // ── Draft / resume ────────────────────────────────────────────────────────────
   let draft: SetupDraft = loadDraft() ?? { step: 0 };
@@ -90,7 +92,11 @@ export async function runSetup(): Promise<void> {
 
     tempoBaseUrl = getTempoBaseUrl(tempoRegion);
 
-    draft = { ...draft, step: 1, tempo: { token: tempoToken, baseUrl: tempoBaseUrl, accountId: '' } };
+    draft = {
+      ...draft,
+      step: 1,
+      tempo: { token: tempoToken, baseUrl: tempoBaseUrl, accountId: '' },
+    };
     saveDraft(draft);
   }
 
@@ -109,7 +115,9 @@ export async function runSetup(): Promise<void> {
     accountId = draft.tempo.accountId;
     printSuccess('  Jira credentials restored from draft');
   } else {
-    printHint('Get your Jira API token: https://id.atlassian.com/manage-profile/security/api-tokens');
+    printHint(
+      'Get your Jira API token: https://id.atlassian.com/manage-profile/security/api-tokens'
+    );
 
     jiraBaseUrl = await promptText(
       'Jira base URL (e.g. https://yourcompany.atlassian.net):',
@@ -240,9 +248,8 @@ export async function runSetup(): Promise<void> {
     // Exchange the pasted refresh token immediately to verify it works and get an access token
     let tokenData: { access_token: string; refresh_token: string };
     try {
-      tokenData = await withSpinner(
-        'Verifying Dyce credentials…',
-        () => refreshAccessToken(dyceClientId, pastedRefreshToken, effectiveScope)
+      tokenData = await withSpinner('Verifying Dyce credentials…', () =>
+        refreshAccessToken(dyceClientId, pastedRefreshToken, effectiveScope)
       );
       dyceAccessToken = tokenData.access_token;
       dyceRefreshToken = tokenData.refresh_token;
@@ -252,17 +259,21 @@ export async function runSetup(): Promise<void> {
       process.exit(1);
     }
 
-    dyceInstance = decodeInput(await promptText(
-      'Dyce x-instance value (from api.dyce.cloud request headers):',
-      undefined,
-      (v) => v.trim().length > 0 || 'Cannot be empty'
-    ));
+    dyceInstance = decodeInput(
+      await promptText(
+        'Dyce x-instance value (from api.dyce.cloud request headers):',
+        undefined,
+        (v) => v.trim().length > 0 || 'Cannot be empty'
+      )
+    );
 
-    dyceCompany = decodeInput(await promptText(
-      'Dyce x-company value (from api.dyce.cloud request headers):',
-      undefined,
-      (v) => v.trim().length > 0 || 'Cannot be empty'
-    ));
+    dyceCompany = decodeInput(
+      await promptText(
+        'Dyce x-company value (from api.dyce.cloud request headers):',
+        undefined,
+        (v) => v.trim().length > 0 || 'Cannot be empty'
+      )
+    );
 
     const dyceClient3 = new DyceClient(dyceAccessToken, dyceInstance, dyceCompany);
 
@@ -275,7 +286,9 @@ export async function runSetup(): Promise<void> {
         const res = recordings[0].resource;
         printSuccess(`Detected Dyce resource: ${res.name} (${res.no})`);
 
-        const confirmed = await promptConfirm(`Use "${res.name} (${res.no})" as your Dyce resource?`);
+        const confirmed = await promptConfirm(
+          `Use "${res.name} (${res.no})" as your Dyce resource?`
+        );
         if (confirmed) {
           dyceResourceNo = res.no;
           dyceResourceId = res.id;
@@ -354,20 +367,18 @@ export async function runSetup(): Promise<void> {
     } = draft.paser);
     printSuccess('  Paser credentials restored from draft');
   } else {
-    printHint('Use your Paser email/password. aion will use session cookies automatically during sync.');
-
-    paserBaseUrl = await promptText(
-      'Paser base URL:',
-      'https://app.paser.io',
-      (v) => {
-        try {
-          new URL(v);
-          return true;
-        } catch {
-          return 'Enter a valid URL';
-        }
-      }
+    printHint(
+      'Use your Paser email/password. aion will use session cookies automatically during sync.'
     );
+
+    paserBaseUrl = await promptText('Paser base URL:', 'https://app.paser.io', (v) => {
+      try {
+        new URL(v);
+        return true;
+      } catch {
+        return 'Enter a valid URL';
+      }
+    });
 
     paserEmail = await promptText('Paser email address:', jiraEmail, (v) =>
       v.includes('@') ? true : 'Enter a valid email'
@@ -436,12 +447,13 @@ export async function runSetup(): Promise<void> {
   // ── Step 5: Project Mappings ──────────────────────────────────────────────────
   printStep(5, TOTAL_STEPS, 'Project Mappings');
   console.log(
-    chalk.dim('  Map Jira project keys or exact issue keys to Dyce Customer / Job / Job Task codes.\n')
+    chalk.dim(
+      '  Map Jira project keys or exact issue keys to Dyce Customer / Job / Job Task codes.\n'
+    )
   );
 
-  const mappings: DyceMapping[] = resuming && draft.step >= 5 && draft.mappings
-    ? draft.mappings
-    : [];
+  const mappings: DyceMapping[] =
+    resuming && draft.step >= 5 && draft.mappings ? draft.mappings : [];
 
   if (resuming && draft.step >= 5 && draft.mappings) {
     printSuccess(`  ${mappings.length} mapping(s) restored from draft`);
@@ -464,7 +476,9 @@ export async function runSetup(): Promise<void> {
     let customerId: string | undefined;
     let customerName: string | undefined;
 
-    const customers = await withSpinner('Fetching Dyce customers…', () => dyceClient.listCustomers());
+    const customers = await withSpinner('Fetching Dyce customers…', () =>
+      dyceClient.listCustomers()
+    );
     if (customers.length > 0) {
       const choices = customers.map((c) => ({
         name: `${c.no}${c.name ? ` — ${c.name}` : c.description ? ` — ${c.description}` : ''}`,
@@ -484,7 +498,9 @@ export async function runSetup(): Promise<void> {
     let jobId: string | undefined;
     let jobDescription: string | undefined;
 
-    const jobs = await withSpinner('Fetching Dyce projects…', () => dyceClient.listJobs(customerId));
+    const jobs = await withSpinner('Fetching Dyce projects…', () =>
+      dyceClient.listJobs(customerId)
+    );
     if (jobs.length > 0) {
       const choices = jobs.map((j) => ({
         name: `${j.no}${j.description ? ` — ${j.description}` : ''}`,
@@ -504,7 +520,9 @@ export async function runSetup(): Promise<void> {
     let jobTaskId: string | undefined;
     let jobTaskDescription: string | undefined;
 
-    const jobTasks = await withSpinner('Fetching Dyce project tasks…', () => dyceClient.listJobTasks(jobId));
+    const jobTasks = await withSpinner('Fetching Dyce project tasks…', () =>
+      dyceClient.listJobTasks(jobId)
+    );
     if (jobTasks.length > 0) {
       const choices = jobTasks.map((t) => ({
         name: `${t.no}${t.description ? ` — ${t.description}` : ''}`,
@@ -516,7 +534,9 @@ export async function runSetup(): Promise<void> {
       jobTaskDescription = sel?.description;
     } else {
       printWarning('Could not fetch project tasks — enter the No manually.');
-      printHint('Open DevTools → Network → /api/resourceJobAssignments/JobTasks response → copy the "no" value.');
+      printHint(
+        'Open DevTools → Network → /api/resourceJobAssignments/JobTasks response → copy the "no" value.'
+      );
       dyceJobTaskNo = await promptText('  Dyce Project Task No:');
     }
 
@@ -524,9 +544,8 @@ export async function runSetup(): Promise<void> {
     let jobPlanningLineId: string | undefined;
     let jobPlanningLineDescription: string | undefined;
     if (jobTaskId) {
-      const planningLines = await withSpinner(
-        'Fetching Dyce job planning lines…',
-        () => dyceClient.listJobPlanningLines(jobTaskId!)
+      const planningLines = await withSpinner('Fetching Dyce job planning lines…', () =>
+        dyceClient.listJobPlanningLines(jobTaskId!)
       );
       if (planningLines.length === 1) {
         jobPlanningLineId = planningLines[0].id;
@@ -574,11 +593,12 @@ export async function runSetup(): Promise<void> {
 
   let vacationPrefixes: string[];
   let publicHolidayDescription: string;
-  let leaveTypeMappings: LeaveTypeMappings = {};
+  let leaveTypeMappings: LeaveTypeMappings;
 
   if (resuming && draft.step >= 6 && draft.vacationPrefixes) {
     vacationPrefixes = draft.vacationPrefixes;
-    publicHolidayDescription = draft.publicHolidayDescription ?? 'Government approved official holiday';
+    publicHolidayDescription =
+      draft.publicHolidayDescription ?? 'Government approved official holiday';
     leaveTypeMappings = draft.leaveTypeMappings ?? {};
     printSuccess(`  Vacation prefixes restored: ${vacationPrefixes.join(', ') || '(none)'}`);
   } else {
@@ -610,7 +630,9 @@ export async function runSetup(): Promise<void> {
 
     console.log();
     console.log(chalk.bold('  Now configure Dyce targets for each leave type:'));
-    console.log(chalk.dim('  Each leave type is logged to its own Dyce customer / project / task.\n'));
+    console.log(
+      chalk.dim('  Each leave type is logged to its own Dyce customer / project / task.\n')
+    );
 
     leaveTypeMappings = await configureLeaveTypeMappings(dyceClient);
 

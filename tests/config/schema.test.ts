@@ -179,7 +179,10 @@ describe('ConfigSchema', () => {
     const cfg = {
       ...validConfig,
       leaveTypeMappings: {
-        vacation: { label: 'Annual Leave', dyce: { customerNo: 'C001', jobNo: 'J-VAC', jobTaskNo: 'T-VAC' } },
+        vacation: {
+          label: 'Annual Leave',
+          dyce: { customerNo: 'C001', jobNo: 'J-VAC', jobTaskNo: 'T-VAC' },
+        },
         sickLeave: { dyce: { customerNo: 'C001', jobNo: 'J-SICK', jobTaskNo: 'T-SICK' } },
         publicHoliday: { dyce: { customerNo: 'C001', jobNo: 'J-HOL', jobTaskNo: 'T-HOL' } },
       },
@@ -198,7 +201,6 @@ describe('ConfigSchema', () => {
   });
 
   it('accepts config without leaveTypeMappings (backward-compatible)', () => {
-    const { leaveTypeMappings: _, ...cfg } = { ...validConfig, leaveTypeMappings: undefined };
     expect(ConfigSchema.safeParse(validConfig).success).toBe(true);
   });
 });

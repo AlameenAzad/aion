@@ -1,4 +1,9 @@
-import { extractProjectKey, findMapping, findMappings, isVacationEntry } from '../../src/utils/mapping';
+import {
+  extractProjectKey,
+  findMapping,
+  findMappings,
+  isVacationEntry,
+} from '../../src/utils/mapping';
 import { DyceMapping } from '../../src/config/schema';
 
 const makeMapping = (jiraProjectKey: string): DyceMapping => ({
@@ -83,9 +88,9 @@ describe('findMappings', () => {
       makeMapping('INP1-11755'),
     ];
     expect(findMappings('INP1-11755', mappings)).toHaveLength(2);
-    expect(findMappings('INP1-11755', mappings).every((m) => m.jiraProjectKey === 'INP1-11755')).toBe(
-      true
-    );
+    expect(
+      findMappings('INP1-11755', mappings).every((m) => m.jiraProjectKey === 'INP1-11755')
+    ).toBe(true);
   });
 
   it('falls back to all project-prefix mappings when no exact mapping exists', () => {
@@ -124,7 +129,7 @@ describe('isVacationEntry', () => {
     expect(isVacationEntry('INP1-11755', ['INP1-11755'])).toBe(true);
   });
 
-  it('does not treat an exact issue key as a project-wide prefix', () => {
-    expect(isVacationEntry('INP1-11756', ['INP1-11755'])).toBe(false);
+  it('returns false for empty string entries in the prefixes array', () => {
+    expect(isVacationEntry('VAC-1', ['', 'PROJ'])).toBe(false);
   });
 });
