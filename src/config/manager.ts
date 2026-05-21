@@ -174,6 +174,8 @@ export function saveConfig(config: Config): void {
   // Persist secrets to keychain; only strip them from the file if it succeeded.
   const keychainWritten = persistSecretsToKeychain(config);
 
+  // lgtm[js/http-to-file-access] - config is Zod-validated user credentials written
+  // to the user's own home directory (~/.aion/config.json) with mode 0o600.
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(buildFileConfig(config, keychainWritten), null, 2), {
     encoding: 'utf-8',
     mode: 0o600,
