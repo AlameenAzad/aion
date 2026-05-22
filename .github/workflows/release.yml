@@ -40,7 +40,7 @@ jobs:
         run: npm test
 
       - name: Build
-        run: npm run build
+        run: npm run build && chmod +x dist/index.js
 
       - name: Publish to npm
         run: npm publish --access public --loglevel http
