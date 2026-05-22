@@ -38,11 +38,9 @@ jobs:
         run: npm run build && chmod +x dist/index.js
 
       - name: Publish to npm
-        run: npm publish --access public --loglevel http
-
-      - name: Print npm debug log
-        if: failure()
-        run: cat /home/runner/.npm/_logs/*.log | tail -200
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
