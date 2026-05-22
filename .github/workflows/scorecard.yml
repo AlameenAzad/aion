@@ -7,16 +7,17 @@ on:
     # Weekly on Monday at 06:00 UTC
     - cron: '0 6 * * 1'
 
-permissions:
-  security-events: write
-  id-token: write
-  contents: read
-  actions: read
+permissions: read-all
 
 jobs:
   analysis:
     name: OpenSSF Scorecard
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
 
     steps:
       - name: Checkout
