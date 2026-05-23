@@ -17,6 +17,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![CodeQL](https://github.com/alameenazad/aion/actions/workflows/codeql.yml/badge.svg)](https://github.com/alameenazad/aion/actions/workflows/codeql.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
 
 </div>
 
@@ -41,9 +42,11 @@
 - [Quick start](#quick-start)
 - [Commands](#commands)
   - [aion setup](#aion-setup)
+  - [aion status](#aion-status)
   - [aion sync](#aion-sync)
   - [aion preview](#aion-preview)
   - [aion config](#aion-config)
+- [Global flags](#global-flags)
 - [Configuration file](#configuration-file)
 - [Date range flags](#date-range-flags)
 - [Vacation / leave detection](#vacation--leave-detection)
@@ -118,6 +121,18 @@ Re-run at any time to reconfigure. You can also use `aion config` sub-commands t
 
 ---
 
+### `aion status`
+
+Check connectivity to all configured services at once — useful for debugging auth failures.
+
+```bash
+aion status
+```
+
+Shows a `✓` / `✗` row for Tempo, Jira, Dyce, and Paser (if configured), plus the Dyce token expiry. Exits with code `1` if any service fails.
+
+---
+
 ### `aion sync`
 
 Syncs Tempo worklogs to Dyce. Defaults to the **current calendar month**.
@@ -125,20 +140,24 @@ Syncs Tempo worklogs to Dyce. Defaults to the **current calendar month**.
 ```bash
 aion sync                        # current month
 aion sync --today                # today only
-aion sync --week                 # this week (Mon–Sun)
+aion sync --yesterday            # yesterday only
+aion sync --week                 # this week
+aion sync --last-week            # last week
+aion sync --last-month           # last calendar month
 aion sync --from 2026-05-01 --to 2026-05-14
 ```
 
 **What happens:**
 
-1. Fetches worklogs from Tempo
-2. Enriches with Jira issue titles (batched)
-3. Shows a preview table with status for each entry
-4. Auto-matches Paser.io vacation/sick requests by date range
-5. If multiple Paser requests match one day, prompts you to choose
-6. If no Paser request matches, asks for manual Paser request ID
-7. Asks for confirmation, then POSTs to Dyce
-8. Marks synced IDs in `~/.aion/synced.json` (prevents duplicates)
+1. Validates that all Jira project keys in the worklogs have Dyce mappings — offers to add any missing ones inline before proceeding
+2. Fetches worklogs from Tempo
+3. Enriches with Jira issue titles (batched)
+4. Shows a preview table with status for each entry
+5. Auto-matches Paser.io vacation/sick requests by date range
+6. If multiple Paser requests match one day, prompts you to choose
+7. If no Paser request matches, asks for manual Paser request ID
+8. Asks for confirmation, then POSTs to Dyce
+9. Marks synced IDs in `~/.aion/synced.json` (prevents duplicates)
 
 ---
 
@@ -149,6 +168,9 @@ Dry run — shows the preview table without syncing anything.
 ```bash
 aion preview
 aion preview --today
+aion preview --yesterday
+aion preview --last-week
+aion preview --last-month
 aion preview --from 2026-04-01 --to 2026-04-30
 ```
 
@@ -163,6 +185,9 @@ aion config list            # show current config (tokens masked)
 aion config add-mapping     # add/update a Jira → Dyce project mapping
 aion config set-vacation    # update vacation/leave prefixes AND Dyce targets per leave type
 aion config edit-paser      # update Paser credentials/account
+aion config export          # export config to a JSON file
+aion config export --file ~/backup.json --include-secrets  # include plaintext tokens
+aion config import backup.json  # import/merge config from a previously exported file
 ```
 
 **Example `config list` output:**
@@ -200,6 +225,21 @@ Leave Type Mappings:
   vacation     : C002 / J-VAC / T-VAC
   sickLeave    : C002 / J-SICK / T-SICK
   publicHoliday: C002 / J-HOL / T-HOL
+```
+
+---
+
+## Global flags
+
+| Flag | Description |
+|---|---|
+| `--verbose` | Print verbose HTTP request/response debug info to stderr |
+| `--version` | Show the installed aion version |
+| `--help` | Show help text for any command |
+
+```bash
+aion --verbose sync --today        # sync today with full debug output
+aion --verbose status              # check connectivity with debug info
 ```
 
 ---
@@ -272,7 +312,10 @@ On **macOS, Linux, and Windows**, API tokens and passwords are stored in the OS 
 |---|---|
 | *(none)* | Current calendar month |
 | `--today` | Today only |
-| `--week` | Current week (Mon–Sun) |
+| `--yesterday` | Yesterday only |
+| `--week` | Current week |
+| `--last-week` | Previous week |
+| `--last-month` | Previous calendar month |
 | `--from YYYY-MM-DD` | Start date (uses today as end if `--to` is omitted) |
 | `--to YYYY-MM-DD` | End date (requires `--from`) |
 

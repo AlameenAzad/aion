@@ -7,6 +7,10 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockGet = jest.fn();
 mockedAxios.create.mockReturnValue({
   get: mockGet,
+  interceptors: {
+    request: { use: jest.fn() },
+    response: { use: jest.fn() },
+  },
 } as unknown as ReturnType<typeof axios.create>);
 
 const client = new JiraClient('https://myco.atlassian.net', 'user@myco.com', 'jira-token');

@@ -4,6 +4,7 @@ import { showBanner } from './ui/banner';
 import { runSetup } from './commands/setup';
 import { runSync } from './commands/sync';
 import { runPreview } from './commands/preview';
+import { runStatus } from './commands/status';
 import {
   runConfigList,
   runConfigAddMapping,
@@ -13,11 +14,40 @@ import {
   runConfigEditPaser,
   runConfigReAuthDyce,
 } from './commands/config';
+import { runConfigExport, runConfigImport } from './commands/configExport';
 import { configExists } from './config/manager';
+import { setVerbose } from './utils/verbose';
 
 const program = new Command();
 
-program.name('aion').description('Sync Tempo worklogs → Dyce time recordings').version('1.0.0');
+program
+  .name('aion')
+  .description('Sync Tempo worklogs → Dyce time recordings')
+  .version('1.0.0')
+  .option('--verbose', 'Enable verbose debug output to stderr')
+  .hook('preAction', (thisCommand) => {
+    const opts = thisCommand.opts<{ verbose?: boolean }>();
+    if (opts.verbose) setVerbose(true);
+  });
+
+// ── aion status ──────────────────────────────────────────────────────────────
+program
+  .command('status')
+  .description('Check connectivity to all configured services (Tempo, Jira, Dyce, Paser)')
+  .action(async () => {
+    if (!configExists()) {
+      console.error(
+        chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
+      );
+      process.exit(1);
+    }
+    try {
+      await runStatus();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
 
 // ── aion setup ───────────────────────────────────────────────────────────────
 program
@@ -37,10 +67,13 @@ program
   .command('sync')
   .description('Sync Tempo worklogs to Dyce (default: current month)')
   .option('--today', "Sync today's worklogs only")
+  .option('--yesterday', "Sync yesterday's worklogs only")
   .option('--week', "Sync this week's worklogs")
+  .option('--last-week', "Sync last week's worklogs")
+  .option('--last-month', "Sync last month's worklogs")
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
-  .action(async (opts: { today?: boolean; week?: boolean; from?: string; to?: string }) => {
+  .action(async (opts: { today?: boolean; yesterday?: boolean; week?: boolean; lastWeek?: boolean; lastMonth?: boolean; from?: string; to?: string }) => {
     if (!configExists()) {
       console.error(
         chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
@@ -61,10 +94,13 @@ program
   .command('preview')
   .description('Dry run — show what would be synced without making changes')
   .option('--today', "Preview today's worklogs only")
+  .option('--yesterday', "Preview yesterday's worklogs only")
   .option('--week', "Preview this week's worklogs")
+  .option('--last-week', "Preview last week's worklogs")
+  .option('--last-month', "Preview last month's worklogs")
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
-  .action(async (opts: { today?: boolean; week?: boolean; from?: string; to?: string }) => {
+  .action(async (opts: { today?: boolean; yesterday?: boolean; week?: boolean; lastWeek?: boolean; lastMonth?: boolean; from?: string; to?: string }) => {
     if (!configExists()) {
       console.error(
         chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
@@ -161,6 +197,32 @@ configCmd
   .action(async () => {
     try {
       await runConfigReAuthDyce();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+configCmd
+  .command('export')
+  .description('Export current configuration to a JSON file')
+  .option('--file <path>', 'Output file path (default: ./aion-config-export.json)')
+  .option('--include-secrets', 'Include plaintext secrets in the export (handle with care)')
+  .action(async (opts: { file?: string; includeSecrets?: boolean }) => {
+    try {
+      await runConfigExport(opts);
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+configCmd
+  .command('import <file>')
+  .description('Import configuration from a JSON file exported by `aion config export`')
+  .action(async (file: string) => {
+    try {
+      await runConfigImport(file);
     } catch (err) {
       console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
       process.exit(1);

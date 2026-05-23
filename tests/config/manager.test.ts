@@ -66,6 +66,7 @@ const validConfig: Config = {
   },
   mappings: [],
   vacationPrefixes: [],
+  schemaVersion: 1,
 };
 
 beforeEach(() => {

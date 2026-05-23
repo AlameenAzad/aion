@@ -13,7 +13,7 @@ import {
   secondsToMinutes,
   timeToSeconds,
 } from '../utils/date';
-import { findMappings, isVacationEntry } from '../utils/mapping';
+import { findMappings, isVacationEntry, extractProjectKey } from '../utils/mapping';
 import {
   ParsedPaserCase,
   findCasesMatchingDate,
@@ -24,6 +24,7 @@ import { printWorklogTable, printSyncSummary, TableRow } from '../ui/table';
 import { startSpinner } from '../ui/spinner';
 import { promptText, promptConfirm, promptList, printWarning } from '../ui/prompts';
 import { DyceMapping, DyceLeaveMapping } from '../config/schema';
+import { runConfigAddMapping } from './config';
 
 interface SyncOptions extends DateFlags {
   dryRun?: boolean;
@@ -73,6 +74,41 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   if (worklogs.length === 0) {
     console.log(chalk.dim('\n  No worklogs found for the selected date range.\n'));
     return;
+  }
+
+  // ── Pre-sync validation ───────────────────────────────────────────────────
+  // Collect project keys that are missing a Dyce mapping (and aren't vacation entries).
+  const allProjectKeys = [
+    ...new Set(
+      worklogs
+        .map((wl) => {
+          const key = wl.issue.key ?? `ISSUE-${wl.issue.id}`;
+          return extractProjectKey(key);
+        })
+    ),
+  ];
+
+  const unmappedKeys = allProjectKeys.filter(
+    (pk) =>
+      findMappings(pk, config.mappings).length === 0 &&
+      !isVacationEntry(pk, config.vacationPrefixes)
+  );
+
+  if (unmappedKeys.length > 0) {
+    console.log();
+    printWarning(
+      `No Dyce mapping found for: ${unmappedKeys.map((k) => chalk.cyan(k)).join(', ')}\n` +
+        '  Entries for these projects will be skipped unless you create a mapping now.'
+    );
+
+    for (const pk of unmappedKeys) {
+      const create = await promptConfirm(`Create a Dyce mapping for ${chalk.cyan(pk)} now?`);
+      if (create) {
+        await runConfigAddMapping(pk);
+        // Reload config so the new mapping is used below
+        Object.assign(config, loadConfig());
+      }
+    }
   }
 
   // ── Enrich with Jira issue info ─────────────────────────────────────────────

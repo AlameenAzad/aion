@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import { applyRetryInterceptor } from '../utils/retry';
+import { verboseLog } from '../utils/verbose';
 
 export interface TempoWorklog {
   tempoWorklogId: number;
@@ -41,6 +43,15 @@ export class TempoClient {
       },
       timeout: 30000,
     });
+    this.client.interceptors.request.use((cfg) => {
+      verboseLog(`[Tempo] ${cfg.method?.toUpperCase()} ${cfg.url}`);
+      return cfg;
+    });
+    this.client.interceptors.response.use(
+      (res) => { verboseLog(`[Tempo] ${res.status} ${res.config.url}`); return res; },
+      (err) => { verboseLog(`[Tempo] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`); return Promise.reject(err); }
+    );
+    applyRetryInterceptor(this.client, 'Tempo');
   }
 
   async getWorklogs(params: {

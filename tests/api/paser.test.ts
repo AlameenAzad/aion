@@ -11,6 +11,10 @@ mockedAxios.create.mockReturnValue({
   get: mockGet,
   post: mockPost,
   defaults: { headers: { common: {} as Record<string, string> } },
+  interceptors: {
+    request: { use: jest.fn() },
+    response: { use: jest.fn() },
+  },
 } as unknown as ReturnType<typeof axios.create>);
 
 const client = new PaserClient('https://app.paser.io');
@@ -114,6 +118,10 @@ describe('PaserClient constructor with initial sessionCookie', () => {
       get: mockGet,
       post: mockPost,
       defaults: { headers: mockDefaultsHeaders },
+      interceptors: {
+        request: { use: jest.fn() },
+        response: { use: jest.fn() },
+      },
     } as unknown as ReturnType<typeof axios.create>);
 
     new PaserClient('https://app.paser.io', 'SessionId=initial; Path=/');

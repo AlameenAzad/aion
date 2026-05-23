@@ -1,4 +1,5 @@
 import { ConfigSchema, DyceMappingSchema, DyceLeaveMappingSchema } from '../../src/config/schema';
+import { migrateRawConfig } from '../../src/config/manager';
 
 const validMapping = {
   jiraProjectKey: 'PROJ',
@@ -221,5 +222,51 @@ describe('DyceLeaveMappingSchema', () => {
   it('rejects a missing customerNo', () => {
     const bad = { dyce: { jobNo: 'J001', jobTaskNo: 'T001' } };
     expect(DyceLeaveMappingSchema.safeParse(bad).success).toBe(false);
+  });
+});
+
+
+// ── schemaVersion + migrateRawConfig ─────────────────────────────────────────
+
+describe('schemaVersion', () => {
+  it('defaults schemaVersion to 1 when not present in config', () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe(1);
+    }
+  });
+
+  it('accepts config that explicitly sets schemaVersion: 1', () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, schemaVersion: 1 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe(1);
+    }
+  });
+
+  it('rejects non-integer schemaVersion', () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, schemaVersion: 1.5 });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('migrateRawConfig', () => {
+  it('stamps schemaVersion: 1 on objects without it', () => {
+    const input = { foo: 'bar' };
+    const output = migrateRawConfig(input) as Record<string, unknown>;
+    expect(output.schemaVersion).toBe(1);
+  });
+
+  it('does not overwrite an existing schemaVersion', () => {
+    const input = { foo: 'bar', schemaVersion: 1 };
+    const output = migrateRawConfig(input) as Record<string, unknown>;
+    expect(output.schemaVersion).toBe(1);
+  });
+
+  it('returns non-object values unchanged', () => {
+    expect(migrateRawConfig(null)).toBeNull();
+    expect(migrateRawConfig('string')).toBe('string');
+    expect(migrateRawConfig(42)).toBe(42);
   });
 });

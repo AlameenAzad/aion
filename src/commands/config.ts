@@ -91,17 +91,23 @@ export function runConfigList(): void {
   console.log();
 }
 
-export async function runConfigAddMapping(): Promise<void> {
+export async function runConfigAddMapping(prefillKey?: string): Promise<void> {
   const config = loadConfig();
 
   printStep(1, 1, 'Add Project Mapping');
   printHint('Map a Jira project key or exact issue key to a Dyce Customer / Job / Job Task.');
 
-  const jiraProjectKey = await promptText(
-    'Jira project key or issue key (e.g. PROJ or INP1-11755):',
-    undefined,
-    (v) => v.trim().length > 0 || 'Cannot be empty'
-  );
+  let jiraProjectKey: string;
+  if (prefillKey) {
+    jiraProjectKey = prefillKey.trim().toUpperCase();
+    console.log(chalk.dim(`  Jira key: ${jiraProjectKey}`));
+  } else {
+    jiraProjectKey = await promptText(
+      'Jira project key or issue key (e.g. PROJ or INP1-11755):',
+      undefined,
+      (v) => v.trim().length > 0 || 'Cannot be empty'
+    );
+  }
 
   const existingCount = config.mappings.filter(
     (m) => m.jiraProjectKey.toUpperCase() === jiraProjectKey.trim().toUpperCase()

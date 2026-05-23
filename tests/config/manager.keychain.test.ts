@@ -54,6 +54,7 @@ const validConfig: Config = {
   },
   mappings: [],
   vacationPrefixes: [],
+  schemaVersion: 1,
 };
 
 // File config where secrets have been stripped (as saved when keychain is on).

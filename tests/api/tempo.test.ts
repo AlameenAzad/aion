@@ -11,6 +11,10 @@ const mockPost = jest.fn();
 mockedAxios.create.mockReturnValue({
   get: mockGet,
   post: mockPost,
+  interceptors: {
+    request: { use: jest.fn() },
+    response: { use: jest.fn() },
+  },
 } as unknown as ReturnType<typeof axios.create>);
 
 const client = new TempoClient('test-token', 'https://api.eu.tempo.io');

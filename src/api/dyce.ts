@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import { applyRetryInterceptor } from '../utils/retry';
+import { verboseLog } from '../utils/verbose';
 
 function withCause(message: string, cause: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -74,6 +76,15 @@ export class DyceClient {
       },
       timeout: 30000,
     });
+    this.client.interceptors.request.use((cfg) => {
+      verboseLog(`[Dyce] ${cfg.method?.toUpperCase()} ${cfg.url}`);
+      return cfg;
+    });
+    this.client.interceptors.response.use(
+      (res) => { verboseLog(`[Dyce] ${res.status} ${res.config.url}`); return res; },
+      (err) => { verboseLog(`[Dyce] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`); return Promise.reject(err); }
+    );
+    applyRetryInterceptor(this.client, 'Dyce');
   }
 
   async createTimeRecording(recording: DyceTimeRecording): Promise<DyceTimeRecording> {
