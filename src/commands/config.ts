@@ -504,7 +504,6 @@ export async function runConfigReAuthDyce(): Promise<void> {
 
   let accessToken: string;
   let refreshToken: string;
-
   try {
     const tokenData = await withSpinner('Verifying Dyce credentials…', () =>
       refreshAccessToken(dyceClientId, pastedRefreshToken, effectiveScope)

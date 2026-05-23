@@ -27,6 +27,8 @@
 
 - Fetches worklogs from Tempo for any date range
 - Enriches them with Jira issue titles
+- Uses Tempo user-scoped worklog queries (fewer unnecessary API calls)
+- Uses Jira enhanced search (`/rest/api/3/search/jql`) with batching to reduce duplicate lookups
 - Maps Jira projects → Dyce customers / jobs / tasks (configured once)
 - Detects vacation, sick leave, and public holiday entries — each routed to a dedicated Dyce target
 - Auto-matches Paser.io requests by date range for vacation and sick leave
@@ -108,7 +110,8 @@ Interactive wizard that walks you through connecting Tempo, Jira, Paser, and Dyc
 Steps:
   [1/7] Tempo API         — token + region
   [2/7] Jira API          — base URL, email, token (also fetches your accountId)
-  [3/7] Dyce API          — bearer token, x-instance, x-company, resource auto-detection
+  [3/7] Dyce API          — client_id, scope, refresh_token (from DevTools),
+                            x-instance, x-company, resource auto-detection
   [4/7] Paser API         — base URL, email, password, account selection
   [5/7] Project mappings  — Jira project key → Dyce Customer / Job / Job Task
   [6/7] Leave detection   — which Jira tickets mean vacation/leave, then configure a
@@ -150,8 +153,8 @@ aion sync --from 2026-05-01 --to 2026-05-14
 **What happens:**
 
 1. Validates that all Jira project keys in the worklogs have Dyce mappings — offers to add any missing ones inline before proceeding
-2. Fetches worklogs from Tempo
-3. Enriches with Jira issue titles (batched)
+2. Fetches worklogs from Tempo (user-scoped)
+3. Enriches with Jira issue titles using batched `/search/jql` lookups
 4. Shows a preview table with status for each entry
 5. Auto-matches Paser.io vacation/sick requests by date range
 6. If multiple Paser requests match one day, prompts you to choose
@@ -185,10 +188,13 @@ aion config list            # show current config (tokens masked)
 aion config add-mapping     # add/update a Jira → Dyce project mapping
 aion config set-vacation    # update vacation/leave prefixes AND Dyce targets per leave type
 aion config edit-paser      # update Paser credentials/account
+aion config re-auth-dyce    # update Dyce token pair from a fresh refresh_token
 aion config export          # export config to a JSON file
 aion config export --file ~/backup.json --include-secrets  # include plaintext tokens
 aion config import backup.json  # import/merge config from a previously exported file
 ```
+
+`aion config re-auth-dyce` is the recommended recovery path when Dyce token refresh fails (for example after refresh token expiry).
 
 **Example `config list` output:**
 
@@ -356,13 +362,30 @@ To re-sync an entry, remove its ID from `~/.aion/synced.json`.
 
 ---
 
+## Dyce auth troubleshooting
+
+If `aion status` or `aion sync` reports Dyce refresh failures such as `AADSTS700084`, run:
+
+```bash
+aion config re-auth-dyce
+```
+
+Then provide a fresh `refresh_token` from your normal Dyce browser session (DevTools network payload).
+
+Common cases:
+
+- `AADSTS700084`: SPA refresh token expired (fixed 24h lifetime) — must re-auth with a new refresh token
+- `AADSTS7000218`: flow requires client secret/assertion for device-code-style auth; use manual refresh-token mode
+
+---
+
 ## Getting your API tokens
 
 | Service | Where to find it |
 |---|---|
 | **Tempo** | Tempo app → Settings → API integration → New Token |
 | **Jira** | https://id.atlassian.com/manage-profile/security/api-tokens |
-| **Dyce** | Dyce instance → Settings → API / Integration |
+| **Dyce** | In your normal Dyce browser session: DevTools → Network → token request payload (`client_id`, `scope`, `refresh_token`); `x-instance`/`x-company` from Dyce API request headers or `/api/settings` |
 
 ---
 

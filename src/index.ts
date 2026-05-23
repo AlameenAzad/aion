@@ -193,7 +193,7 @@ configCmd
 
 configCmd
   .command('re-auth-dyce')
-  .description('Re-authenticate with Dyce via Microsoft OAuth2 device code flow')
+  .description('Re-authenticate Dyce by updating OAuth refresh token from DevTools')
   .action(async () => {
     try {
       await runConfigReAuthDyce();
