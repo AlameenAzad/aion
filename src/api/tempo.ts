@@ -64,34 +64,37 @@ export class TempoClient {
     const limit = 50;
 
     while (true) {
-      const res = await this.client.get<TempoWorklogsResponse>('/4/worklogs', {
-        params: {
-          from: params.from,
-          to: params.to,
-          // Some Tempo versions use 'worker', others use 'accountId'
-          worker: params.accountId,
-          accountId: params.accountId,
-          limit,
-          offset,
-        },
-      });
+      const res = await this.client.get<TempoWorklogsResponse>(
+        `/4/worklogs/user/${encodeURIComponent(params.accountId)}`,
+        {
+          params: {
+            from: params.from,
+            to: params.to,
+            limit,
+            offset,
+          },
+        }
+      );
 
       const data = res.data;
       allWorklogs.push(...data.results);
 
-      if (!data.metadata.next || data.results.length < limit) break;
+      // Tempo v4 omits `metadata.next` when there are no more pages.
+      // Do NOT break on results.length < limit — the API returns all users'
+      // worklogs per page (ignoring the worker/accountId param on some tenants),
+      // so full pages of 50 are returned even when only a few belong to this user.
+      if (!data.metadata.next) break;
       offset += limit;
     }
 
-    // Hard client-side filter — guard against API ignoring the user param
-    return allWorklogs.filter((w) => w.author.accountId === params.accountId);
+    return allWorklogs;
   }
 
   async testConnection(accountId: string): Promise<boolean> {
     const today = new Date().toISOString().slice(0, 10);
     try {
-      await this.client.get<TempoWorklogsResponse>('/4/worklogs', {
-        params: { from: today, to: today, accountId, limit: 1 },
+      await this.client.get<TempoWorklogsResponse>(`/4/worklogs/user/${encodeURIComponent(accountId)}`, {
+        params: { from: today, to: today, limit: 1 },
       });
       return true;
     } catch {

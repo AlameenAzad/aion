@@ -71,9 +71,9 @@ describe('TempoClient.getWorklogs', () => {
     expect(worklogs).toHaveLength(1);
     expect(worklogs[0].tempoWorklogId).toBe(1001);
     expect(mockGet).toHaveBeenCalledWith(
-      '/4/worklogs',
+      '/4/worklogs/user/acc1',
       expect.objectContaining({
-        params: expect.objectContaining({ from: '2026-05-01', accountId: 'acc1' }),
+        params: expect.objectContaining({ from: '2026-05-01', to: '2026-05-31' }),
       })
     );
   });

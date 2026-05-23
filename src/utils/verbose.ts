@@ -10,6 +10,8 @@ export function isVerbose(): boolean {
 
 export function verboseLog(...args: unknown[]): void {
   if (_verbose) {
-    process.stderr.write(`[verbose] ${args.map(String).join(' ')}\n`);
+    // \r\x1B[2K clears the current spinner line so verbose output
+    // doesn't get appended to the spinner text mid-animation.
+    process.stdout.write(`\r\x1B[2K[verbose] ${args.map(String).join(' ')}\n`);
   }
 }

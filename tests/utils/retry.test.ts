@@ -24,12 +24,12 @@ function makeAxiosError(
     {},
     status
       ? {
-          status,
-          statusText: String(status),
-          data: {},
-          headers: responseHeaders,
-          config,
-        }
+        status,
+        statusText: String(status),
+        data: {},
+        headers: responseHeaders,
+        config,
+      }
       : undefined
   );
   return err;

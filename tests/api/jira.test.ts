@@ -107,3 +107,40 @@ describe('JiraClient.getIssuesBatch', () => {
     expect(mockGet).toHaveBeenCalledTimes(3); // 1 failed batch + 2 individual
   });
 });
+
+// ── getIssuesByIdBatch ───────────────────────────────────────────────────────
+
+describe('JiraClient.getIssuesByIdBatch', () => {
+  it('returns a map of issue id → issue', async () => {
+    const issues = [
+      { ...mockIssue('PROJ-1'), id: '123' },
+      { ...mockIssue('PROJ-2'), id: '456' },
+    ];
+    mockGet.mockResolvedValueOnce({ data: { issues } });
+
+    const map = await client.getIssuesByIdBatch([123, 456]);
+
+    expect(map.get(123)?.key).toBe('PROJ-1');
+    expect(map.get(456)?.key).toBe('PROJ-2');
+    expect(map.size).toBe(2);
+  });
+
+  it('deduplicates issue ids before fetching', async () => {
+    const issues = [{ ...mockIssue('PROJ-1'), id: '123' }];
+    mockGet.mockResolvedValueOnce({ data: { issues } });
+
+    await client.getIssuesByIdBatch([123, 123, 123]);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to individual issue fetches when JQL batch fails', async () => {
+    mockGet
+      .mockRejectedValueOnce(new Error('JQL error'))
+      .mockResolvedValueOnce({ data: { ...mockIssue('PROJ-1'), id: '123' } })
+      .mockResolvedValueOnce({ data: { ...mockIssue('PROJ-2'), id: '456' } });
+
+    const map = await client.getIssuesByIdBatch([123, 456]);
+    expect(map.size).toBe(2);
+    expect(mockGet).toHaveBeenCalledTimes(3);
+  });
+});

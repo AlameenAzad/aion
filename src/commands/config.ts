@@ -115,7 +115,7 @@ export async function runConfigAddMapping(prefillKey?: string): Promise<void> {
   if (existingCount > 0) {
     printHint(
       `${existingCount} mapping(s) already exist for ${jiraProjectKey.toUpperCase()}. ` +
-        'This new mapping will be added as an additional option.'
+      'This new mapping will be added as an additional option.'
     );
   }
 

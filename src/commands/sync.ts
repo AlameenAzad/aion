@@ -46,9 +46,9 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   console.log();
   console.log(
     chalk.bold(`${isDryRun ? 'Preview' : 'Syncing'} worklogs from `) +
-      chalk.cyan(from) +
-      chalk.bold(' to ') +
-      chalk.cyan(to)
+    chalk.cyan(from) +
+    chalk.bold(' to ') +
+    chalk.cyan(to)
   );
 
   const syncedIds = loadSyncedIds();
@@ -78,13 +78,12 @@ export async function runSync(opts: SyncOptions): Promise<void> {
 
   // ── Pre-sync validation ───────────────────────────────────────────────────
   // Collect project keys that are missing a Dyce mapping (and aren't vacation entries).
+  // Skip worklogs without an issue.key — their project key isn't known until Jira enrichment.
   const allProjectKeys = [
     ...new Set(
       worklogs
-        .map((wl) => {
-          const key = wl.issue.key ?? `ISSUE-${wl.issue.id}`;
-          return extractProjectKey(key);
-        })
+        .filter((wl) => Boolean(wl.issue.key))
+        .map((wl) => extractProjectKey(wl.issue.key!))
     ),
   ];
 
@@ -98,7 +97,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     console.log();
     printWarning(
       `No Dyce mapping found for: ${unmappedKeys.map((k) => chalk.cyan(k)).join(', ')}\n` +
-        '  Entries for these projects will be skipped unless you create a mapping now.'
+      '  Entries for these projects will be skipped unless you create a mapping now.'
     );
 
     for (const pk of unmappedKeys) {
@@ -120,34 +119,34 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     const jira = new JiraClient(config.jira.baseUrl, config.jira.email, config.jira.token);
 
     // Worklogs carry issue.id (number) but we need the key. Try to use issue.key if present.
-    const idsNeedingLookup: number[] = [];
+    const idsNeedingLookup = new Set<number>();
     for (const wl of worklogs) {
       if (wl.issue.key) {
         issueKeyMap.set(wl.issue.id, wl.issue.key);
       } else {
-        idsNeedingLookup.push(wl.issue.id);
+        idsNeedingLookup.add(wl.issue.id);
       }
     }
 
     // Collect all keys we have so far (direct and from worklogs with key)
     const knownKeys = Array.from(issueKeyMap.values());
 
-    // For issues without a key, we try fetching by numeric ID
-    for (const issueId of idsNeedingLookup) {
-      try {
-        const issue = await jira.getIssue(String(issueId));
-        issueKeyMap.set(issueId, issue.key);
-        knownKeys.push(issue.key);
-      } catch {
-        // Skip — will show numeric id as fallback
-      }
+    // Resolve missing issue keys in batches by issue ID (JQL id in (...)).
+    const issuesById = await jira.getIssuesByIdBatch(Array.from(idsNeedingLookup));
+    for (const [issueId, issue] of issuesById) {
+      issueKeyMap.set(issueId, issue.key);
+      knownKeys.push(issue.key);
+      issueSummaryMap.set(issue.key, issue.fields.summary);
     }
 
-    // Batch-fetch summaries for all known keys
+    // Batch-fetch summaries only for keys we still don't have.
     const allKeys = [...new Set([...knownKeys, ...Array.from(issueKeyMap.values())])];
-    const issueMap = await jira.getIssuesBatch(allKeys);
-    for (const [key, issue] of issueMap) {
-      issueSummaryMap.set(key, issue.fields.summary);
+    const missingSummaryKeys = allKeys.filter((key) => !issueSummaryMap.has(key));
+    if (missingSummaryKeys.length > 0) {
+      const issueMap = await jira.getIssuesBatch(missingSummaryKeys);
+      for (const [key, issue] of issueMap) {
+        issueSummaryMap.set(key, issue.fields.summary);
+      }
     }
 
     jiraSpinner.succeed(chalk.green(`Fetched ${issueSummaryMap.size} issue title(s) from Jira`));
@@ -329,7 +328,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         console.log(
           chalk.dim(
             `  Using ${specialEntryType} mapping → ` +
-              `${dedicatedLeaveMapping.dyce.customerNo} / ${dedicatedLeaveMapping.dyce.jobNo} / ${dedicatedLeaveMapping.dyce.jobTaskNo}`
+            `${dedicatedLeaveMapping.dyce.customerNo} / ${dedicatedLeaveMapping.dyce.jobNo} / ${dedicatedLeaveMapping.dyce.jobTaskNo}`
           )
         );
       } else if (item.mappingCandidates.length > 1) {
@@ -346,7 +345,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         if (!dedicatedLeaveMapping) {
           printWarning(
             `  No dedicated ${specialEntryType} mapping configured — falling back to regular project mapping.\n` +
-              `  Run \`aion setup\` and reconfigure Step 6 to set a dedicated ${specialEntryType} Dyce target.`
+            `  Run \`aion setup\` and reconfigure Step 6 to set a dedicated ${specialEntryType} Dyce target.`
           );
         }
       }

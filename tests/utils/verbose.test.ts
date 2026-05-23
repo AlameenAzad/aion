@@ -21,17 +21,17 @@ describe('verbose utility', () => {
   });
 
   it('verboseLog writes nothing to stderr when verbose is false', () => {
-    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const spy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
     setVerbose(false);
     verboseLog('should not appear');
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 
-  it('verboseLog writes to stderr when verbose is true', () => {
+  it('verboseLog writes to stdout when verbose is true', () => {
     const written: string[] = [];
     const spy = jest
-      .spyOn(process.stderr, 'write')
+      .spyOn(process.stdout, 'write')
       .mockImplementation((chunk) => { written.push(String(chunk)); return true; });
     setVerbose(true);
     verboseLog('hello', 'world');
@@ -45,7 +45,7 @@ describe('verbose utility', () => {
   it('verboseLog writes multiple args joined by space', () => {
     const written: string[] = [];
     const spy = jest
-      .spyOn(process.stderr, 'write')
+      .spyOn(process.stdout, 'write')
       .mockImplementation((chunk) => { written.push(String(chunk)); return true; });
     setVerbose(true);
     verboseLog('a', 42, true);
