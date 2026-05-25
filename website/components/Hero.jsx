@@ -85,10 +85,6 @@ const SyncOrbit = () => {
   // Exponential decay — sharp at the moment of arrival, fades smoothly to ~0.05
   const destFlash = Math.exp(-arrivalCycle * 5);
 
-  // Counter: total arrivals so far
-  const arrivals = Math.floor(tick * arrivalRate);
-  const displayCount = baseCount + arrivals;
-
   // Source breathing (subtle, independent)
   const sourceBreath = (i) => 1 + 0.04 * Math.sin(tick * 1.6 + i * 2.1);
 
