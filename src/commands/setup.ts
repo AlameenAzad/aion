@@ -685,6 +685,7 @@ export async function runSetup(): Promise<void> {
     vacationPrefixes,
     leaveTypeMappings: Object.keys(leaveTypeMappings).length > 0 ? leaveTypeMappings : undefined,
     publicHolidayDescription,
+    schemaVersion: 1,
   };
 
   saveConfig(config);
