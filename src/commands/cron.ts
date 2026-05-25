@@ -85,16 +85,14 @@ function buildPlist(nodePath: string, scriptPath: string): string {
 }
 
 async function installMacos(nodePath: string, scriptPath: string): Promise<void> {
-  // Ensure the LaunchAgents directory exists
+  // Ensure the LaunchAgents directory exists (mkdirSync with recursive is idempotent)
   const launchAgentsDir = path.dirname(LAUNCH_AGENT_PLIST);
-  if (!fs.existsSync(launchAgentsDir)) {
-    fs.mkdirSync(launchAgentsDir, { recursive: true });
-  }
+  fs.mkdirSync(launchAgentsDir, { recursive: true });
 
-  // If already loaded, unload first to avoid "already loaded" errors
-  if (fs.existsSync(LAUNCH_AGENT_PLIST)) {
-    await execFileNoThrow('launchctl', ['unload', LAUNCH_AGENT_PLIST]);
-  }
+  // Always attempt unload — execFileNoThrow swallows the error when the plist
+  // isn't loaded yet. This also avoids a TOCTOU race between existsSync and
+  // the subsequent write (flagged by CodeQL as a file-system race condition).
+  await execFileNoThrow('launchctl', ['unload', LAUNCH_AGENT_PLIST]);
 
   fs.writeFileSync(LAUNCH_AGENT_PLIST, buildPlist(nodePath, scriptPath), { mode: 0o644 });
 
@@ -140,14 +138,19 @@ async function installLinux(nodePath: string, scriptPath: string): Promise<void>
   const block = `${CRON_BEGIN}\n${cronLine}\n${CRON_END}\n`;
   const updated = existing.trimEnd() + (existing.trim() ? '\n' : '') + block;
 
-  // Write to a temp file then pipe to crontab
-  const tmpFile = path.join(os.tmpdir(), 'aion-crontab.tmp');
-  fs.writeFileSync(tmpFile, updated);
-  const result = await execFileNoThrow('crontab', [tmpFile]);
-  fs.unlinkSync(tmpFile);
-
-  if (result.exitCode !== 0) {
-    throw new Error(`crontab write failed: ${result.stderr.trim()}`);
+  // Write to a uniquely-named temp file then pipe to crontab.
+  // mkdtempSync creates a directory with a random suffix, avoiding the
+  // predictable-path symlink attack flagged by CodeQL (insecure temp file).
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aion-'));
+  const tmpFile = path.join(tmpDir, 'crontab');
+  try {
+    fs.writeFileSync(tmpFile, updated, { mode: 0o600, flag: 'wx' });
+    const result = await execFileNoThrow('crontab', [tmpFile]);
+    if (result.exitCode !== 0) {
+      throw new Error(`crontab write failed: ${result.stderr.trim()}`);
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -164,10 +167,14 @@ async function uninstallLinux(): Promise<void> {
     return;
   }
 
-  const tmpFile = path.join(os.tmpdir(), 'aion-crontab.tmp');
-  fs.writeFileSync(tmpFile, cleaned);
-  await execFileNoThrow('crontab', [tmpFile]);
-  fs.unlinkSync(tmpFile);
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aion-'));
+  const tmpFile = path.join(tmpDir, 'crontab');
+  try {
+    fs.writeFileSync(tmpFile, cleaned, { mode: 0o600, flag: 'wx' });
+    await execFileNoThrow('crontab', [tmpFile]);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 async function statusLinux(): Promise<void> {
