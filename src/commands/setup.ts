@@ -21,6 +21,7 @@ import { saveConfig, loadDraft, saveDraft, clearDraft, SetupDraft } from '../con
 import { keychainAvailable } from '../config/keychain';
 import { Config, DyceMapping } from '../config/schema';
 import { configureLeaveTypeMappings, LeaveTypeMappings } from '../utils/leaveSetup';
+import { runCronInstall } from './cron';
 
 /** Safely decode a URL-encoded string (e.g. "My%20Company" → "My Company"). */
 function decodeInput(value: string): string {
@@ -691,6 +692,21 @@ export async function runSetup(): Promise<void> {
   // Setup completed — remove abort handlers so they don't fire on normal exit
   process.off('SIGINT', onAbort);
   process.off('SIGTERM', onAbort);
+
+  // ── Offer to install background token-refresh job ─────────────────────────
+  console.log();
+  printHint(
+    'Dyce refresh tokens expire after 24 hours if unused. A background job can keep your session alive automatically.'
+  );
+  const installCron = await promptConfirm(
+    'Install a background job to refresh your Dyce token every 12 hours?',
+    true
+  );
+  if (installCron) {
+    await runCronInstall();
+  } else {
+    printHint('You can install it later with: aion cron install');
+  }
 
   console.log();
   if (keychainAvailable) {

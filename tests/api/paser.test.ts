@@ -7,13 +7,23 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 
+let capturedRequestCb: ((cfg: unknown) => unknown) | undefined;
+let capturedResponseSuccessCb: ((res: unknown) => unknown) | undefined;
+let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
+
+const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => { capturedRequestCb = cb; });
+const responseInterceptorUse = jest.fn((successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
+  capturedResponseSuccessCb = successCb;
+  capturedResponseErrorCb = errorCb;
+});
+
 mockedAxios.create.mockReturnValue({
   get: mockGet,
   post: mockPost,
   defaults: { headers: { common: {} as Record<string, string> } },
   interceptors: {
-    request: { use: jest.fn() },
-    response: { use: jest.fn() },
+    request: { use: requestInterceptorUse },
+    response: { use: responseInterceptorUse },
   },
 } as unknown as ReturnType<typeof axios.create>);
 
@@ -183,5 +193,29 @@ describe('PaserClient.authenticate (string set-cookie)', () => {
 
     const auth = await client.authenticate('user@company.com', 'secret');
     expect(auth.sessionCookie).toBe('SessionId=string-cookie; Path=/');
+  });
+});
+
+// ── verbose interceptors ──────────────────────────────────────────────────────
+
+describe('PaserClient verbose interceptors', () => {
+  it('request interceptor callback passes config through', () => {
+    const cfg = { method: 'post', url: '/api/user/authenticate/' };
+    expect(capturedRequestCb!(cfg)).toBe(cfg);
+  });
+
+  it('response success interceptor callback returns the response', () => {
+    const res = { status: 200, config: { url: '/api/user/authenticate/' } };
+    expect(capturedResponseSuccessCb!(res)).toBe(res);
+  });
+
+  it('response error interceptor callback rejects with the error', async () => {
+    const err = { response: { status: 403 }, config: { url: '/api/user/authenticate/' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles network error (no response)', async () => {
+    const err = { config: { url: '/api/user/authenticate/' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
   });
 });

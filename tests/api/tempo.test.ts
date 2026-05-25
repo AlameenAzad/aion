@@ -5,6 +5,16 @@ jest.mock('axios');
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
+let capturedRequestCb: ((cfg: unknown) => unknown) | undefined;
+let capturedResponseSuccessCb: ((res: unknown) => unknown) | undefined;
+let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
+
+const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => { capturedRequestCb = cb; });
+const responseInterceptorUse = jest.fn((successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
+  capturedResponseSuccessCb = successCb;
+  capturedResponseErrorCb = errorCb;
+});
+
 // axios.create returns an instance; we mock the instance methods
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -12,8 +22,8 @@ mockedAxios.create.mockReturnValue({
   get: mockGet,
   post: mockPost,
   interceptors: {
-    request: { use: jest.fn() },
-    response: { use: jest.fn() },
+    request: { use: requestInterceptorUse },
+    response: { use: responseInterceptorUse },
   },
 } as unknown as ReturnType<typeof axios.create>);
 
@@ -151,5 +161,29 @@ describe('TempoClient.testConnection', () => {
   it('returns false when the request throws', async () => {
     mockGet.mockRejectedValueOnce(new Error('Unauthorized'));
     expect(await client.testConnection('acc1')).toBe(false);
+  });
+});
+
+// ── verbose interceptors ──────────────────────────────────────────────────────
+
+describe('TempoClient verbose interceptors', () => {
+  it('request interceptor callback passes config through', () => {
+    const cfg = { method: 'get', url: '/4/worklogs/user/acc1' };
+    expect(capturedRequestCb!(cfg)).toBe(cfg);
+  });
+
+  it('response success interceptor callback returns the response', () => {
+    const res = { status: 200, config: { url: '/4/worklogs/user/acc1' } };
+    expect(capturedResponseSuccessCb!(res)).toBe(res);
+  });
+
+  it('response error interceptor callback rejects with the error', async () => {
+    const err = { response: { status: 401 }, config: { url: '/4/worklogs/user/acc1' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles network error (no response)', async () => {
+    const err = { config: { url: '/4/worklogs/user/acc1' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
   });
 });

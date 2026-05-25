@@ -15,6 +15,8 @@ import {
   runConfigReAuthDyce,
 } from './commands/config';
 import { runConfigExport, runConfigImport } from './commands/configExport';
+import { runTokenRefresh } from './commands/tokenRefresh';
+import { runCronInstall, runCronUninstall, runCronStatus } from './commands/cron';
 import { configExists } from './config/manager';
 import { setVerbose } from './utils/verbose';
 
@@ -223,6 +225,70 @@ configCmd
   .action(async (file: string) => {
     try {
       await runConfigImport(file);
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+// ── aion token-refresh ───────────────────────────────────────────────────────
+program
+  .command('token-refresh')
+  .description('Silently refresh the Dyce access token (safe to run as a scheduled job)')
+  .action(async () => {
+    if (!configExists()) {
+      console.error(
+        chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
+      );
+      process.exit(1);
+    }
+    try {
+      await runTokenRefresh();
+    } catch (err) {
+      console.error(`aion token-refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+  });
+
+// ── aion cron ────────────────────────────────────────────────────────────────
+const cronCmd = program.command('cron').description('Manage the background Dyce token-refresh job');
+
+cronCmd
+  .command('install')
+  .description('Install a system job to refresh the Dyce token every 12 hours')
+  .action(async () => {
+    if (!configExists()) {
+      console.error(
+        chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
+      );
+      process.exit(1);
+    }
+    try {
+      await runCronInstall();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+cronCmd
+  .command('uninstall')
+  .description('Remove the background token-refresh job')
+  .action(async () => {
+    try {
+      await runCronUninstall();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+cronCmd
+  .command('status')
+  .description('Show whether the background job is installed and its last run result')
+  .action(async () => {
+    try {
+      await runCronStatus();
     } catch (err) {
       console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
       process.exit(1);
