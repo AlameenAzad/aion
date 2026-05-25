@@ -49,8 +49,14 @@ export class PaserClient {
       return cfg;
     });
     this.client.interceptors.response.use(
-      (res) => { verboseLog(`[Paser] ${res.status} ${res.config.url}`); return res; },
-      (err) => { verboseLog(`[Paser] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`); return Promise.reject(err); }
+      (res) => {
+        verboseLog(`[Paser] ${res.status} ${res.config.url}`);
+        return res;
+      },
+      (err) => {
+        verboseLog(`[Paser] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`);
+        return Promise.reject(err);
+      }
     );
     applyRetryInterceptor(this.client, 'Paser');
 

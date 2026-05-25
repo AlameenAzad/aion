@@ -75,21 +75,33 @@ program
   .option('--last-month', "Sync last month's worklogs")
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
-  .action(async (opts: { today?: boolean; yesterday?: boolean; week?: boolean; lastWeek?: boolean; lastMonth?: boolean; from?: string; to?: string }) => {
-    if (!configExists()) {
-      console.error(
-        chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
-      );
-      process.exit(1);
+  .action(
+    async (opts: {
+      today?: boolean;
+      yesterday?: boolean;
+      week?: boolean;
+      lastWeek?: boolean;
+      lastMonth?: boolean;
+      from?: string;
+      to?: string;
+    }) => {
+      if (!configExists()) {
+        console.error(
+          chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
+        );
+        process.exit(1);
+      }
+      showBanner();
+      try {
+        await runSync(opts);
+      } catch (err) {
+        console.error(
+          chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`)
+        );
+        process.exit(1);
+      }
     }
-    showBanner();
-    try {
-      await runSync(opts);
-    } catch (err) {
-      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
-      process.exit(1);
-    }
-  });
+  );
 
 // ── aion preview ────────────────────────────────────────────────────────────
 program
@@ -102,21 +114,33 @@ program
   .option('--last-month', "Preview last month's worklogs")
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
-  .action(async (opts: { today?: boolean; yesterday?: boolean; week?: boolean; lastWeek?: boolean; lastMonth?: boolean; from?: string; to?: string }) => {
-    if (!configExists()) {
-      console.error(
-        chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
-      );
-      process.exit(1);
+  .action(
+    async (opts: {
+      today?: boolean;
+      yesterday?: boolean;
+      week?: boolean;
+      lastWeek?: boolean;
+      lastMonth?: boolean;
+      from?: string;
+      to?: string;
+    }) => {
+      if (!configExists()) {
+        console.error(
+          chalk.red('\n  No config found. Run ') + chalk.cyan('aion setup') + chalk.red(' first.\n')
+        );
+        process.exit(1);
+      }
+      showBanner();
+      try {
+        await runPreview(opts);
+      } catch (err) {
+        console.error(
+          chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`)
+        );
+        process.exit(1);
+      }
     }
-    showBanner();
-    try {
-      await runPreview(opts);
-    } catch (err) {
-      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
-      process.exit(1);
-    }
-  });
+  );
 
 // ── aion config ─────────────────────────────────────────────────────────────
 const configCmd = program.command('config').description('Manage aion configuration');
@@ -245,7 +269,9 @@ program
     try {
       await runTokenRefresh();
     } catch (err) {
-      console.error(`aion token-refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `aion token-refresh failed: ${err instanceof Error ? err.message : String(err)}`
+      );
       process.exit(1);
     }
   });

@@ -30,9 +30,10 @@ describe('verbose utility', () => {
 
   it('verboseLog writes to stdout when verbose is true', () => {
     const written: string[] = [];
-    const spy = jest
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk) => { written.push(String(chunk)); return true; });
+    const spy = jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
     setVerbose(true);
     verboseLog('hello', 'world');
     expect(spy).toHaveBeenCalledTimes(1);
@@ -44,9 +45,10 @@ describe('verbose utility', () => {
 
   it('verboseLog writes multiple args joined by space', () => {
     const written: string[] = [];
-    const spy = jest
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk) => { written.push(String(chunk)); return true; });
+    const spy = jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
     setVerbose(true);
     verboseLog('a', 42, true);
     expect(written[0]).toContain('a 42 true');

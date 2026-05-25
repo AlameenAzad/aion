@@ -225,7 +225,6 @@ describe('DyceLeaveMappingSchema', () => {
   });
 });
 
-
 // ── schemaVersion + migrateRawConfig ─────────────────────────────────────────
 
 describe('schemaVersion', () => {

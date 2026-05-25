@@ -48,8 +48,14 @@ export class TempoClient {
       return cfg;
     });
     this.client.interceptors.response.use(
-      (res) => { verboseLog(`[Tempo] ${res.status} ${res.config.url}`); return res; },
-      (err) => { verboseLog(`[Tempo] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`); return Promise.reject(err); }
+      (res) => {
+        verboseLog(`[Tempo] ${res.status} ${res.config.url}`);
+        return res;
+      },
+      (err) => {
+        verboseLog(`[Tempo] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`);
+        return Promise.reject(err);
+      }
     );
     applyRetryInterceptor(this.client, 'Tempo');
   }
@@ -93,9 +99,12 @@ export class TempoClient {
   async testConnection(accountId: string): Promise<boolean> {
     const today = new Date().toISOString().slice(0, 10);
     try {
-      await this.client.get<TempoWorklogsResponse>(`/4/worklogs/user/${encodeURIComponent(accountId)}`, {
-        params: { from: today, to: today, limit: 1 },
-      });
+      await this.client.get<TempoWorklogsResponse>(
+        `/4/worklogs/user/${encodeURIComponent(accountId)}`,
+        {
+          params: { from: today, to: today, limit: 1 },
+        }
+      );
       return true;
     } catch {
       return false;

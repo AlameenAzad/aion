@@ -45,8 +45,14 @@ export class JiraClient {
       return cfg;
     });
     this.client.interceptors.response.use(
-      (res) => { verboseLog(`[Jira] ${res.status} ${res.config.url}`); return res; },
-      (err) => { verboseLog(`[Jira] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`); return Promise.reject(err); }
+      (res) => {
+        verboseLog(`[Jira] ${res.status} ${res.config.url}`);
+        return res;
+      },
+      (err) => {
+        verboseLog(`[Jira] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`);
+        return Promise.reject(err);
+      }
     );
     applyRetryInterceptor(this.client, 'Jira');
   }

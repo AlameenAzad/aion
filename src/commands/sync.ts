@@ -46,9 +46,9 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   console.log();
   console.log(
     chalk.bold(`${isDryRun ? 'Preview' : 'Syncing'} worklogs from `) +
-    chalk.cyan(from) +
-    chalk.bold(' to ') +
-    chalk.cyan(to)
+      chalk.cyan(from) +
+      chalk.bold(' to ') +
+      chalk.cyan(to)
   );
 
   const syncedIds = loadSyncedIds();
@@ -81,9 +81,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   // Skip worklogs without an issue.key — their project key isn't known until Jira enrichment.
   const allProjectKeys = [
     ...new Set(
-      worklogs
-        .filter((wl) => Boolean(wl.issue.key))
-        .map((wl) => extractProjectKey(wl.issue.key!))
+      worklogs.filter((wl) => Boolean(wl.issue.key)).map((wl) => extractProjectKey(wl.issue.key!))
     ),
   ];
 
@@ -97,7 +95,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     console.log();
     printWarning(
       `No Dyce mapping found for: ${unmappedKeys.map((k) => chalk.cyan(k)).join(', ')}\n` +
-      '  Entries for these projects will be skipped unless you create a mapping now.'
+        '  Entries for these projects will be skipped unless you create a mapping now.'
     );
 
     for (const pk of unmappedKeys) {
@@ -328,7 +326,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         console.log(
           chalk.dim(
             `  Using ${specialEntryType} mapping → ` +
-            `${dedicatedLeaveMapping.dyce.customerNo} / ${dedicatedLeaveMapping.dyce.jobNo} / ${dedicatedLeaveMapping.dyce.jobTaskNo}`
+              `${dedicatedLeaveMapping.dyce.customerNo} / ${dedicatedLeaveMapping.dyce.jobNo} / ${dedicatedLeaveMapping.dyce.jobTaskNo}`
           )
         );
       } else if (item.mappingCandidates.length > 1) {
@@ -345,7 +343,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         if (!dedicatedLeaveMapping) {
           printWarning(
             `  No dedicated ${specialEntryType} mapping configured — falling back to regular project mapping.\n` +
-            `  Run \`aion setup\` and reconfigure Step 6 to set a dedicated ${specialEntryType} Dyce target.`
+              `  Run \`aion setup\` and reconfigure Step 6 to set a dedicated ${specialEntryType} Dyce target.`
           );
         }
       }

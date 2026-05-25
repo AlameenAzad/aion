@@ -16,9 +16,9 @@ interface ServiceStatus {
 function tokenExpiry(token: string | undefined): string {
   if (!token) return 'no cached token (will refresh)';
   try {
-    const payload = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64url').toString()
-    ) as { exp?: number };
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()) as {
+      exp?: number;
+    };
     if (!payload.exp) return 'unknown expiry';
     const diffSeconds = Math.floor(payload.exp - Date.now() / 1000);
     if (diffSeconds <= 0) return chalk.red('expired');
@@ -54,7 +54,9 @@ export async function runStatus(): Promise<void> {
   try {
     config = loadConfig();
   } catch (err) {
-    console.error(chalk.red(`\n  Failed to load config: ${err instanceof Error ? err.message : String(err)}\n`));
+    console.error(
+      chalk.red(`\n  Failed to load config: ${err instanceof Error ? err.message : String(err)}\n`)
+    );
     process.exit(1);
   }
 

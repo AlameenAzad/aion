@@ -13,10 +13,7 @@ export interface ExecResult {
  * Runs an executable with the given arguments, returning stdout/stderr/exitCode
  * without throwing. Uses execFile (not exec) to prevent shell injection.
  */
-export async function execFileNoThrow(
-  file: string,
-  args: string[] = []
-): Promise<ExecResult> {
+export async function execFileNoThrow(file: string, args: string[] = []): Promise<ExecResult> {
   try {
     const { stdout, stderr } = await execFileAsync(file, args);
     return { stdout, stderr, exitCode: 0 };

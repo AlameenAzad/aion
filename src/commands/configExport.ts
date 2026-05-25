@@ -61,7 +61,9 @@ export async function runConfigExport(opts: {
   if (includeSecrets) {
     printWarning(`${SENSITIVE_NOTICE}`);
   } else {
-    console.log(chalk.dim('  Sensitive tokens were excluded. Re-run with --include-secrets to include them.'));
+    console.log(
+      chalk.dim('  Sensitive tokens were excluded. Re-run with --include-secrets to include them.')
+    );
   }
   console.log();
 }
@@ -114,14 +116,14 @@ export async function runConfigImport(filePath: string): Promise<void> {
     !!incoming.paser?.password;
 
   if (!hasSecrets) {
-    printWarning('No credentials found in this export file. You will need to re-run `aion setup` or update tokens manually after import.');
+    printWarning(
+      'No credentials found in this export file. You will need to re-run `aion setup` or update tokens manually after import.'
+    );
   }
 
   const overwriting = configExists();
   const confirmed = await promptConfirm(
-    overwriting
-      ? 'This will overwrite your current config. Continue?'
-      : 'Import this config?'
+    overwriting ? 'This will overwrite your current config. Continue?' : 'Import this config?'
   );
   if (!confirmed) {
     console.log(chalk.dim('\n  Import cancelled.\n'));

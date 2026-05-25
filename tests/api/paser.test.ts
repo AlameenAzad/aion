@@ -11,11 +11,15 @@ let capturedRequestCb: ((cfg: unknown) => unknown) | undefined;
 let capturedResponseSuccessCb: ((res: unknown) => unknown) | undefined;
 let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
 
-const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => { capturedRequestCb = cb; });
-const responseInterceptorUse = jest.fn((successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
-  capturedResponseSuccessCb = successCb;
-  capturedResponseErrorCb = errorCb;
+const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => {
+  capturedRequestCb = cb;
 });
+const responseInterceptorUse = jest.fn(
+  (successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
+    capturedResponseSuccessCb = successCb;
+    capturedResponseErrorCb = errorCb;
+  }
+);
 
 mockedAxios.create.mockReturnValue({
   get: mockGet,

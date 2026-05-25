@@ -81,8 +81,14 @@ export class DyceClient {
       return cfg;
     });
     this.client.interceptors.response.use(
-      (res) => { verboseLog(`[Dyce] ${res.status} ${res.config.url}`); return res; },
-      (err) => { verboseLog(`[Dyce] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`); return Promise.reject(err); }
+      (res) => {
+        verboseLog(`[Dyce] ${res.status} ${res.config.url}`);
+        return res;
+      },
+      (err) => {
+        verboseLog(`[Dyce] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`);
+        return Promise.reject(err);
+      }
     );
     applyRetryInterceptor(this.client, 'Dyce');
   }

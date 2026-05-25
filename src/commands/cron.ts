@@ -172,8 +172,7 @@ async function uninstallLinux(): Promise<void> {
 
 async function statusLinux(): Promise<void> {
   const listResult = await execFileNoThrow('crontab', ['-l']);
-  const installed =
-    listResult.exitCode === 0 && listResult.stdout.includes(CRON_BEGIN);
+  const installed = listResult.exitCode === 0 && listResult.stdout.includes(CRON_BEGIN);
 
   if (installed) {
     printSuccess('Job installed (user crontab, every 12 hours)');
@@ -189,8 +188,14 @@ function removeCronBlock(crontab: string): string {
   const out: string[] = [];
   let inside = false;
   for (const line of lines) {
-    if (line.trimEnd() === CRON_BEGIN) { inside = true; continue; }
-    if (line.trimEnd() === CRON_END) { inside = false; continue; }
+    if (line.trimEnd() === CRON_BEGIN) {
+      inside = true;
+      continue;
+    }
+    if (line.trimEnd() === CRON_END) {
+      inside = false;
+      continue;
+    }
     if (!inside) out.push(line);
   }
   return out.join('\n');
@@ -201,10 +206,14 @@ function removeCronBlock(crontab: string): string {
 async function installWindows(nodePath: string, scriptPath: string): Promise<void> {
   const result = await execFileNoThrow('schtasks', [
     '/Create',
-    '/TN', WINDOWS_TASK_NAME,
-    '/TR', `"${nodePath}" "${scriptPath}" token-refresh`,
-    '/SC', 'HOURLY',
-    '/MO', '12',
+    '/TN',
+    WINDOWS_TASK_NAME,
+    '/TR',
+    `"${nodePath}" "${scriptPath}" token-refresh`,
+    '/SC',
+    'HOURLY',
+    '/MO',
+    '12',
     '/F', // overwrite if exists
   ]);
   if (result.exitCode !== 0) {
@@ -213,11 +222,7 @@ async function installWindows(nodePath: string, scriptPath: string): Promise<voi
 }
 
 async function uninstallWindows(): Promise<void> {
-  const result = await execFileNoThrow('schtasks', [
-    '/Delete',
-    '/TN', WINDOWS_TASK_NAME,
-    '/F',
-  ]);
+  const result = await execFileNoThrow('schtasks', ['/Delete', '/TN', WINDOWS_TASK_NAME, '/F']);
   if (result.exitCode !== 0) {
     printWarning(`Could not remove task: ${result.stderr.trim()}`);
   }
@@ -226,8 +231,10 @@ async function uninstallWindows(): Promise<void> {
 async function statusWindows(): Promise<void> {
   const result = await execFileNoThrow('schtasks', [
     '/Query',
-    '/TN', WINDOWS_TASK_NAME,
-    '/FO', 'LIST',
+    '/TN',
+    WINDOWS_TASK_NAME,
+    '/FO',
+    'LIST',
   ]);
   if (result.exitCode === 0) {
     printSuccess(`Job installed: ${WINDOWS_TASK_NAME} (Task Scheduler)`);
@@ -275,7 +282,7 @@ export async function runCronInstall(): Promise<void> {
       default:
         printError(
           `Unsupported platform: ${process.platform}. ` +
-          `Add a cron job manually to run: ${nodePath} ${scriptPath} token-refresh`
+            `Add a cron job manually to run: ${nodePath} ${scriptPath} token-refresh`
         );
         return;
     }
