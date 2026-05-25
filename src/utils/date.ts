@@ -7,7 +7,10 @@ export interface DateRange {
 
 export interface DateFlags {
   today?: boolean;
+  yesterday?: boolean;
   week?: boolean;
+  lastWeek?: boolean;
+  lastMonth?: boolean;
   from?: string;
   to?: string;
 }
@@ -20,10 +23,31 @@ export function getDateRange(flags: DateFlags): DateRange {
     return { from: today, to: today };
   }
 
+  if (flags.yesterday) {
+    const yesterday = now.subtract(1, 'day').format('YYYY-MM-DD');
+    return { from: yesterday, to: yesterday };
+  }
+
   if (flags.week) {
     return {
       from: now.startOf('week').format('YYYY-MM-DD'),
       to: now.endOf('week').format('YYYY-MM-DD'),
+    };
+  }
+
+  if (flags.lastWeek) {
+    const lw = now.subtract(1, 'week');
+    return {
+      from: lw.startOf('week').format('YYYY-MM-DD'),
+      to: lw.endOf('week').format('YYYY-MM-DD'),
+    };
+  }
+
+  if (flags.lastMonth) {
+    const lm = now.subtract(1, 'month');
+    return {
+      from: lm.startOf('month').format('YYYY-MM-DD'),
+      to: lm.endOf('month').format('YYYY-MM-DD'),
     };
   }
 

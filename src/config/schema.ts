@@ -98,6 +98,8 @@ export const ConfigSchema = z.object({
     .optional(),
   /** Description to send to Dyce for government-approved official public holidays */
   publicHolidayDescription: z.string().optional(),
+  /** Schema version — used for future migrations. Always written as 1 for now. */
+  schemaVersion: z.number().int().default(1),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

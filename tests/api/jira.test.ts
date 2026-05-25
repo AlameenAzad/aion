@@ -5,8 +5,28 @@ jest.mock('axios');
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockGet = jest.fn();
+
+// Capture interceptor callbacks before clearAllMocks runs
+let capturedRequestCb: ((cfg: unknown) => unknown) | undefined;
+let capturedResponseSuccessCb: ((res: unknown) => unknown) | undefined;
+let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
+
+const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => {
+  capturedRequestCb = cb;
+});
+const responseInterceptorUse = jest.fn(
+  (successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
+    capturedResponseSuccessCb = successCb;
+    capturedResponseErrorCb = errorCb;
+  }
+);
+
 mockedAxios.create.mockReturnValue({
   get: mockGet,
+  interceptors: {
+    request: { use: requestInterceptorUse },
+    response: { use: responseInterceptorUse },
+  },
 } as unknown as ReturnType<typeof axios.create>);
 
 const client = new JiraClient('https://myco.atlassian.net', 'user@myco.com', 'jira-token');
@@ -101,5 +121,86 @@ describe('JiraClient.getIssuesBatch', () => {
     const map = await client.getIssuesBatch(['PROJ-1', 'PROJ-2']);
     expect(map.size).toBe(2);
     expect(mockGet).toHaveBeenCalledTimes(3); // 1 failed batch + 2 individual
+  });
+});
+
+// ── getIssuesByIdBatch ───────────────────────────────────────────────────────
+
+describe('JiraClient.getIssuesByIdBatch', () => {
+  it('returns a map of issue id → issue', async () => {
+    const issues = [
+      { ...mockIssue('PROJ-1'), id: '123' },
+      { ...mockIssue('PROJ-2'), id: '456' },
+    ];
+    mockGet.mockResolvedValueOnce({ data: { issues } });
+
+    const map = await client.getIssuesByIdBatch([123, 456]);
+
+    expect(map.get(123)?.key).toBe('PROJ-1');
+    expect(map.get(456)?.key).toBe('PROJ-2');
+    expect(map.size).toBe(2);
+  });
+
+  it('deduplicates issue ids before fetching', async () => {
+    const issues = [{ ...mockIssue('PROJ-1'), id: '123' }];
+    mockGet.mockResolvedValueOnce({ data: { issues } });
+
+    await client.getIssuesByIdBatch([123, 123, 123]);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to individual issue fetches when JQL batch fails', async () => {
+    mockGet
+      .mockRejectedValueOnce(new Error('JQL error'))
+      .mockResolvedValueOnce({ data: { ...mockIssue('PROJ-1'), id: '123' } })
+      .mockResolvedValueOnce({ data: { ...mockIssue('PROJ-2'), id: '456' } });
+
+    const map = await client.getIssuesByIdBatch([123, 456]);
+    expect(map.size).toBe(2);
+    expect(mockGet).toHaveBeenCalledTimes(3);
+  });
+
+  it('skips issues with non-finite IDs in batch response', async () => {
+    const issues = [{ ...mockIssue('PROJ-1'), id: 'not-a-number' }];
+    mockGet.mockResolvedValueOnce({ data: { issues } });
+    const map = await client.getIssuesByIdBatch([123]);
+    // non-finite id should be skipped — map stays empty
+    expect(map.size).toBe(0);
+  });
+});
+
+// ── testConnection ────────────────────────────────────────────────────────────
+
+describe('JiraClient.testConnection', () => {
+  it('delegates to getCurrentUser', async () => {
+    mockGet.mockResolvedValueOnce({ data: mockUser });
+    const user = await client.testConnection();
+    expect(user.accountId).toBe('acc-xyz');
+    expect(mockGet).toHaveBeenCalledWith('/rest/api/3/myself');
+  });
+});
+
+// ── verbose interceptors ──────────────────────────────────────────────────────
+
+describe('JiraClient verbose interceptors', () => {
+  it('request interceptor callback passes config through', () => {
+    const cfg = { method: 'get', url: '/rest/api/3/myself' };
+    expect(capturedRequestCb!(cfg)).toBe(cfg);
+  });
+
+  it('response success interceptor callback returns the response', () => {
+    const res = { status: 200, config: { url: '/rest/api/3/myself' } };
+    expect(capturedResponseSuccessCb!(res)).toBe(res);
+  });
+
+  it('response error interceptor callback rejects with the error', async () => {
+    const err = { response: { status: 401 }, config: { url: '/rest/api/3/myself' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles network error (no response)', async () => {
+    // Exercises the `err?.response?.status ?? 'network'` branch
+    const err = { config: { url: '/rest/api/3/myself' } }; // no .response
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
   });
 });

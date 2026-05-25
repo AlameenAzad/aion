@@ -2,8 +2,13 @@ import figlet from 'figlet';
 import gradient from 'gradient-string';
 import boxen from 'boxen';
 import chalk from 'chalk';
+import { checkForUpdate } from '../utils/updateCheck';
 
-export function showBanner(): void {
+import packageJson from '../../package.json';
+
+const CURRENT_VERSION: string = packageJson.version;
+
+export async function showBanner(): Promise<void> {
   const title = figlet.textSync('AION', {
     font: 'Big',
     horizontalLayout: 'fitted',
@@ -12,7 +17,7 @@ export function showBanner(): void {
   const coloredTitle = gradient(['#00d4ff', '#9b59b6', '#e74c3c']).multiline(title);
 
   const subtitle = chalk.dim('  Tempo → Dyce worklog sync  |  αἰών');
-  const version = chalk.dim('  v1.0.0');
+  const version = chalk.dim(`  v${CURRENT_VERSION}`);
 
   const content = `${coloredTitle}\n${subtitle}  ${version}`;
 
@@ -24,6 +29,28 @@ export function showBanner(): void {
       borderColor: 'cyan',
     })
   );
+
+  const latestVersion = await checkForUpdate(CURRENT_VERSION);
+  if (latestVersion) {
+    console.log(
+      boxen(
+        chalk.yellow('  Update available! ') +
+          chalk.dim(`v${CURRENT_VERSION}`) +
+          chalk.yellow(' → ') +
+          chalk.green(`v${latestVersion}`) +
+          '\n' +
+          chalk.dim('  Run ') +
+          chalk.cyan('npm install -g aion-sync') +
+          chalk.dim(' to update.'),
+        {
+          padding: { top: 0, bottom: 0, left: 1, right: 1 },
+          margin: { top: 0, bottom: 1, left: 0, right: 0 },
+          borderStyle: 'round',
+          borderColor: 'yellow',
+        }
+      )
+    );
+  }
 }
 
 export function showSuccessBanner(message: string): void {

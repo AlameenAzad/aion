@@ -58,6 +58,36 @@ describe('getDateRange', () => {
     const range = getDateRange({ today: true, week: true });
     expect(range).toEqual({ from: MOCK_TODAY, to: MOCK_TODAY });
   });
+
+  it('returns yesterday for --yesterday flag', () => {
+    const range = getDateRange({ yesterday: true });
+    expect(range).toEqual({ from: '2026-05-20', to: '2026-05-20' });
+  });
+
+  it('returns the previous week for --last-week flag', () => {
+    // 2026-05-21 is a Thursday; dayjs uses Sunday as start of week by default
+    // previous week: Sun 2026-05-10 → Sat 2026-05-16
+    const range = getDateRange({ lastWeek: true });
+    expect(range.from).toBe('2026-05-10');
+    expect(range.to).toBe('2026-05-16');
+  });
+
+  it('returns the previous month for --last-month flag', () => {
+    const range = getDateRange({ lastMonth: true });
+    expect(range.from).toBe('2026-04-01');
+    expect(range.to).toBe('2026-04-30');
+  });
+
+  it('--yesterday takes precedence over --week', () => {
+    const range = getDateRange({ yesterday: true, week: true });
+    expect(range).toEqual({ from: '2026-05-20', to: '2026-05-20' });
+  });
+
+  it('--last-week takes precedence over --last-month', () => {
+    const range = getDateRange({ lastWeek: true, lastMonth: true });
+    expect(range.from).toBe('2026-05-10');
+    expect(range.to).toBe('2026-05-16');
+  });
 });
 
 // ── formatDuration ────────────────────────────────────────────────────────────

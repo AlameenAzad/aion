@@ -13,7 +13,7 @@ import {
   secondsToMinutes,
   timeToSeconds,
 } from '../utils/date';
-import { findMappings, isVacationEntry } from '../utils/mapping';
+import { findMappings, isVacationEntry, extractProjectKey } from '../utils/mapping';
 import {
   ParsedPaserCase,
   findCasesMatchingDate,
@@ -24,6 +24,7 @@ import { printWorklogTable, printSyncSummary, TableRow } from '../ui/table';
 import { startSpinner } from '../ui/spinner';
 import { promptText, promptConfirm, promptList, printWarning } from '../ui/prompts';
 import { DyceMapping, DyceLeaveMapping } from '../config/schema';
+import { runConfigAddMapping } from './config';
 
 interface SyncOptions extends DateFlags {
   dryRun?: boolean;
@@ -75,6 +76,38 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     return;
   }
 
+  // ── Pre-sync validation ───────────────────────────────────────────────────
+  // Collect project keys that are missing a Dyce mapping (and aren't vacation entries).
+  // Skip worklogs without an issue.key — their project key isn't known until Jira enrichment.
+  const allProjectKeys = [
+    ...new Set(
+      worklogs.filter((wl) => Boolean(wl.issue.key)).map((wl) => extractProjectKey(wl.issue.key!))
+    ),
+  ];
+
+  const unmappedKeys = allProjectKeys.filter(
+    (pk) =>
+      findMappings(pk, config.mappings).length === 0 &&
+      !isVacationEntry(pk, config.vacationPrefixes)
+  );
+
+  if (unmappedKeys.length > 0) {
+    console.log();
+    printWarning(
+      `No Dyce mapping found for: ${unmappedKeys.map((k) => chalk.cyan(k)).join(', ')}\n` +
+        '  Entries for these projects will be skipped unless you create a mapping now.'
+    );
+
+    for (const pk of unmappedKeys) {
+      const create = await promptConfirm(`Create a Dyce mapping for ${chalk.cyan(pk)} now?`);
+      if (create) {
+        await runConfigAddMapping(pk);
+        // Reload config so the new mapping is used below
+        Object.assign(config, loadConfig());
+      }
+    }
+  }
+
   // ── Enrich with Jira issue info ─────────────────────────────────────────────
   const jiraSpinner = startSpinner(`Fetching issue titles from Jira (${worklogs.length} entries)…`);
   const issueKeyMap = new Map<number, string>(); // issueId → issueKey
@@ -84,34 +117,34 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     const jira = new JiraClient(config.jira.baseUrl, config.jira.email, config.jira.token);
 
     // Worklogs carry issue.id (number) but we need the key. Try to use issue.key if present.
-    const idsNeedingLookup: number[] = [];
+    const idsNeedingLookup = new Set<number>();
     for (const wl of worklogs) {
       if (wl.issue.key) {
         issueKeyMap.set(wl.issue.id, wl.issue.key);
       } else {
-        idsNeedingLookup.push(wl.issue.id);
+        idsNeedingLookup.add(wl.issue.id);
       }
     }
 
     // Collect all keys we have so far (direct and from worklogs with key)
     const knownKeys = Array.from(issueKeyMap.values());
 
-    // For issues without a key, we try fetching by numeric ID
-    for (const issueId of idsNeedingLookup) {
-      try {
-        const issue = await jira.getIssue(String(issueId));
-        issueKeyMap.set(issueId, issue.key);
-        knownKeys.push(issue.key);
-      } catch {
-        // Skip — will show numeric id as fallback
-      }
+    // Resolve missing issue keys in batches by issue ID (JQL id in (...)).
+    const issuesById = await jira.getIssuesByIdBatch(Array.from(idsNeedingLookup));
+    for (const [issueId, issue] of issuesById) {
+      issueKeyMap.set(issueId, issue.key);
+      knownKeys.push(issue.key);
+      issueSummaryMap.set(issue.key, issue.fields.summary);
     }
 
-    // Batch-fetch summaries for all known keys
+    // Batch-fetch summaries only for keys we still don't have.
     const allKeys = [...new Set([...knownKeys, ...Array.from(issueKeyMap.values())])];
-    const issueMap = await jira.getIssuesBatch(allKeys);
-    for (const [key, issue] of issueMap) {
-      issueSummaryMap.set(key, issue.fields.summary);
+    const missingSummaryKeys = allKeys.filter((key) => !issueSummaryMap.has(key));
+    if (missingSummaryKeys.length > 0) {
+      const issueMap = await jira.getIssuesBatch(missingSummaryKeys);
+      for (const [key, issue] of issueMap) {
+        issueSummaryMap.set(key, issue.fields.summary);
+      }
     }
 
     jiraSpinner.succeed(chalk.green(`Fetched ${issueSummaryMap.size} issue title(s) from Jira`));

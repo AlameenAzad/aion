@@ -6,9 +6,28 @@ jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockGet = jest.fn();
 const mockPost = jest.fn();
+
+let capturedRequestCb: ((cfg: unknown) => unknown) | undefined;
+let capturedResponseSuccessCb: ((res: unknown) => unknown) | undefined;
+let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
+
+const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => {
+  capturedRequestCb = cb;
+});
+const responseInterceptorUse = jest.fn(
+  (successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
+    capturedResponseSuccessCb = successCb;
+    capturedResponseErrorCb = errorCb;
+  }
+);
+
 mockedAxios.create.mockReturnValue({
   get: mockGet,
   post: mockPost,
+  interceptors: {
+    request: { use: requestInterceptorUse },
+    response: { use: responseInterceptorUse },
+  },
 } as unknown as ReturnType<typeof axios.create>);
 
 const client = new DyceClient('ey-token', 'my-instance', 'my-company');
@@ -398,5 +417,29 @@ describe('DyceClient.createTimeRecording (HTTP error handling)', () => {
     mockPost.mockRejectedValueOnce(axiosError);
 
     await expect(client.createTimeRecording(mockRecording)).rejects.toThrow('HTTP 500:');
+  });
+});
+
+// ── verbose interceptors ──────────────────────────────────────────────────────
+
+describe('DyceClient verbose interceptors', () => {
+  it('request interceptor callback passes config through', () => {
+    const cfg = { method: 'post', url: '/api/timeRecordings' };
+    expect(capturedRequestCb!(cfg)).toBe(cfg);
+  });
+
+  it('response success interceptor callback returns the response', () => {
+    const res = { status: 201, config: { url: '/api/timeRecordings' } };
+    expect(capturedResponseSuccessCb!(res)).toBe(res);
+  });
+
+  it('response error interceptor callback rejects with the error', async () => {
+    const err = { response: { status: 422 }, config: { url: '/api/timeRecordings' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles network error (no response)', async () => {
+    const err = { config: { url: '/api/timeRecordings' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
   });
 });

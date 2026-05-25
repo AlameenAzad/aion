@@ -132,6 +132,19 @@ export function configExists(): boolean {
   return fs.existsSync(CONFIG_FILE);
 }
 
+/**
+ * Stamp schemaVersion: 1 on raw config objects that pre-date schema versioning.
+ * Extend this function with additional migration steps as the schema evolves.
+ */
+export function migrateRawConfig(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object') return raw;
+  const obj = raw as Record<string, unknown>;
+  if (!('schemaVersion' in obj)) {
+    return { ...obj, schemaVersion: 1 };
+  }
+  return raw;
+}
+
 export function loadConfig(): Config {
   if (!fs.existsSync(CONFIG_FILE)) {
     throw new Error(`No config found at ${CONFIG_FILE}. Run \`aion setup\` first.`);
@@ -147,7 +160,7 @@ export function loadConfig(): Config {
   }
 
   // First validate the on-disk format, where secrets may be absent (stored in keychain).
-  const fileResult = FileConfigSchema.safeParse(raw);
+  const fileResult = FileConfigSchema.safeParse(migrateRawConfig(raw));
   if (!fileResult.success) {
     const issues = fileResult.error.issues
       .map((i) => `  • ${i.path.join('.')}: ${i.message}`)

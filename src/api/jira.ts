@@ -1,4 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
+import { applyRetryInterceptor } from '../utils/retry';
+import { verboseLog } from '../utils/verbose';
 
 export interface JiraUser {
   accountId: string;
@@ -38,6 +40,21 @@ export class JiraClient {
       },
       timeout: 30000,
     });
+    this.client.interceptors.request.use((cfg) => {
+      verboseLog(`[Jira] ${cfg.method?.toUpperCase()} ${cfg.url}`);
+      return cfg;
+    });
+    this.client.interceptors.response.use(
+      (res) => {
+        verboseLog(`[Jira] ${res.status} ${res.config.url}`);
+        return res;
+      },
+      (err) => {
+        verboseLog(`[Jira] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`);
+        return Promise.reject(err);
+      }
+    );
+    applyRetryInterceptor(this.client, 'Jira');
   }
 
   async getCurrentUser(): Promise<JiraUser> {
@@ -52,6 +69,17 @@ export class JiraClient {
     return res.data;
   }
 
+  private async searchIssuesByJql(jql: string, maxResults: number): Promise<JiraIssue[]> {
+    const res = await this.client.get<{ issues: JiraIssue[] }>('/rest/api/3/search/jql', {
+      params: {
+        jql,
+        fields: 'summary,issuetype,status,project',
+        maxResults,
+      },
+    });
+    return res.data.issues;
+  }
+
   async getIssuesBatch(issueKeys: string[]): Promise<Map<string, JiraIssue>> {
     const unique = Array.from(new Set(issueKeys));
     const results = new Map<string, JiraIssue>();
@@ -62,14 +90,8 @@ export class JiraClient {
       const batch = unique.slice(i, i + BATCH);
       const jql = `issueKey in (${batch.join(',')})`;
       try {
-        const res = await this.client.get<{ issues: JiraIssue[] }>('/rest/api/3/search', {
-          params: {
-            jql,
-            fields: 'summary,issuetype,status,project',
-            maxResults: BATCH,
-          },
-        });
-        for (const issue of res.data.issues) {
+        const issues = await this.searchIssuesByJql(jql, BATCH);
+        for (const issue of issues) {
           results.set(issue.key, issue);
         }
       } catch {
@@ -78,6 +100,41 @@ export class JiraClient {
           try {
             const issue = await this.getIssue(key);
             results.set(issue.key, issue);
+          } catch {
+            // Skip issues that can't be fetched
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async getIssuesByIdBatch(issueIds: number[]): Promise<Map<number, JiraIssue>> {
+    const unique = Array.from(new Set(issueIds));
+    const results = new Map<number, JiraIssue>();
+
+    const BATCH = 50;
+    for (let i = 0; i < unique.length; i += BATCH) {
+      const batch = unique.slice(i, i + BATCH);
+      const jql = `id in (${batch.join(',')})`;
+      try {
+        const issues = await this.searchIssuesByJql(jql, BATCH);
+        for (const issue of issues) {
+          const id = Number(issue.id);
+          if (Number.isFinite(id)) {
+            results.set(id, issue);
+          }
+        }
+      } catch {
+        // If batch fails, fall back to individual fetches by numeric ID.
+        for (const id of batch) {
+          try {
+            const issue = await this.getIssue(String(id));
+            const numericId = Number(issue.id);
+            if (Number.isFinite(numericId)) {
+              results.set(numericId, issue);
+            }
           } catch {
             // Skip issues that can't be fetched
           }
