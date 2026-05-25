@@ -91,7 +91,7 @@ program
         );
         process.exit(1);
       }
-      showBanner();
+      await showBanner();
       try {
         await runSync(opts);
       } catch (err) {
@@ -130,7 +130,7 @@ program
         );
         process.exit(1);
       }
-      showBanner();
+      await showBanner();
       try {
         await runPreview(opts);
       } catch (err) {
@@ -323,7 +323,7 @@ cronCmd
 
 // Default: show banner + help if no args
 if (process.argv.length <= 2) {
-  showBanner();
+  void showBanner();
 }
 
 program.parse(process.argv);
