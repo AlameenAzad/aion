@@ -16,13 +16,11 @@ function loadKeychain(opts: { disableKeychain?: boolean } = {}) {
   } else {
     delete process.env.AION_DISABLE_KEYCHAIN;
   }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../../src/config/keychain') as typeof import('../../src/config/keychain');
 }
 
 function mockExecFileSync() {
   // Re-require child_process after resetModules so the mock is fresh.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   return (require('child_process') as typeof childProcess).execFileSync as jest.Mock;
 }
 
@@ -90,7 +88,9 @@ describe('getSecret (keychain enabled)', () => {
     if (!['darwin', 'linux', 'win32'].includes(process.platform)) return;
 
     const exec = mockExecFileSync();
-    exec.mockImplementation(() => { throw new Error('not found'); });
+    exec.mockImplementation(() => {
+      throw new Error('not found');
+    });
 
     expect(getSecret(SECRET_ACCOUNTS.jiraToken)).toBeNull();
   });
@@ -156,7 +156,9 @@ describe('setSecret (keychain enabled)', () => {
     if (!['darwin', 'linux', 'win32'].includes(process.platform)) return;
 
     const exec = mockExecFileSync();
-    exec.mockImplementation(() => { throw new Error('write failed'); });
+    exec.mockImplementation(() => {
+      throw new Error('write failed');
+    });
 
     expect(() => setSecret(SECRET_ACCOUNTS.tempoToken, 'v')).toThrow('write failed');
   });
@@ -206,7 +208,9 @@ describe('deleteSecret (keychain enabled)', () => {
     if (!['darwin', 'linux', 'win32'].includes(process.platform)) return;
 
     const exec = mockExecFileSync();
-    exec.mockImplementation(() => { throw new Error('item not found'); });
+    exec.mockImplementation(() => {
+      throw new Error('item not found');
+    });
 
     expect(() => deleteSecret(SECRET_ACCOUNTS.jiraToken)).not.toThrow();
   });
