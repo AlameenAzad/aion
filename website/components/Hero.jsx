@@ -5,7 +5,6 @@ const { useEffect, useRef, useState: useStateHero } = React;
 const SyncOrbit = () => {
   const [tick, setTick] = useStateHero(0);
   const [hovered, setHovered] = useStateHero(null);
-  const [baseCount] = useStateHero(() => 1_284_000 + Math.floor(Math.random() * 5000));
 
   useEffect(() => {
     let raf;
