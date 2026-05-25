@@ -17,7 +17,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![CodeQL](https://github.com/alameenazad/aion/actions/workflows/codeql.yml/badge.svg)](https://github.com/alameenazad/aion/actions/workflows/codeql.yml)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
 
 Project site: https://alameenazad.github.io/aion/
 
