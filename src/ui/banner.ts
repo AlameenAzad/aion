@@ -4,8 +4,9 @@ import boxen from 'boxen';
 import chalk from 'chalk';
 import { checkForUpdate } from '../utils/updateCheck';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const CURRENT_VERSION: string = (require('../../package.json') as { version: string }).version;
+import packageJson from '../../package.json';
+
+const CURRENT_VERSION: string = packageJson.version;
 
 export async function showBanner(): Promise<void> {
   const title = figlet.textSync('AION', {

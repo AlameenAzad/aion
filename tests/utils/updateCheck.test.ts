@@ -26,11 +26,7 @@ const mockedHttps = jest.mocked(https);
 
 // ── import module under test ──────────────────────────────────────────────────
 
-import {
-  isNewerVersion,
-  getLatestVersion,
-  checkForUpdate,
-} from '../../src/utils/updateCheck';
+import { isNewerVersion, getLatestVersion, checkForUpdate } from '../../src/utils/updateCheck';
 
 // ── isNewerVersion ────────────────────────────────────────────────────────────
 
