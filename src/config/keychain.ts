@@ -48,6 +48,7 @@ export const keychainAvailable = PLATFORM !== 'none';
 
 // ── macOS — security(1) CLI ───────────────────────────────────────────────────
 
+/* istanbul ignore next */
 function macGet(account: SecretAccount): string | null {
   const v = execFileSync(
     'security',
@@ -57,6 +58,7 @@ function macGet(account: SecretAccount): string | null {
   return v || null;
 }
 
+/* istanbul ignore next */
 function macSet(account: SecretAccount, value: string): void {
   // -U replaces the existing entry rather than erroring on a duplicate.
   execFileSync(
@@ -66,6 +68,7 @@ function macSet(account: SecretAccount, value: string): void {
   );
 }
 
+/* istanbul ignore next */
 function macDelete(account: SecretAccount): void {
   execFileSync('security', ['delete-generic-password', '-s', SERVICE, '-a', account], {
     stdio: 'pipe',
