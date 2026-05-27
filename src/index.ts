@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name('aion')
   .description('Sync Tempo worklogs → Dyce time recordings')
-  .version('1.0.0')
+  .version(require('../package.json').version as string)
   .option('--verbose', 'Enable verbose debug output to stderr')
   .hook('preAction', (thisCommand) => {
     const opts = thisCommand.opts<{ verbose?: boolean }>();
@@ -269,8 +269,9 @@ program
     try {
       await runTokenRefresh();
     } catch (err) {
-      console.error(
-        `aion token-refresh failed: ${err instanceof Error ? err.message : String(err)}`
+      const ts = new Date().toISOString();
+      process.stdout.write(
+        `[${ts}] token-refresh failed: ${err instanceof Error ? err.message : String(err)}\n`
       );
       process.exit(1);
     }
@@ -281,7 +282,7 @@ const cronCmd = program.command('cron').description('Manage the background Dyce 
 
 cronCmd
   .command('install')
-  .description('Install a system job to refresh the Dyce token every 12 hours')
+  .description('Install a system job to refresh the Dyce token every hour')
   .action(async () => {
     if (!configExists()) {
       console.error(

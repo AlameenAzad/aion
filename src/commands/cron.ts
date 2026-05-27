@@ -72,7 +72,7 @@ function buildPlist(nodePath: string, scriptPath: string): string {
     <string>token-refresh</string>
   </array>
   <key>StartInterval</key>
-  <integer>43200</integer>
+  <integer>3600</integer>
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
@@ -126,7 +126,7 @@ async function statusMacos(): Promise<void> {
 // ── Linux crontab ─────────────────────────────────────────────────────────────
 
 async function installLinux(nodePath: string, scriptPath: string): Promise<void> {
-  const cronLine = `0 */12 * * * ${nodePath} ${scriptPath} token-refresh >> ${CRON_LOG} 2>&1`;
+  const cronLine = `0 * * * * ${nodePath} ${scriptPath} token-refresh >> ${CRON_LOG} 2>&1`;
 
   // Read existing crontab (may be empty / non-existent)
   const listResult = await execFileNoThrow('crontab', ['-l']);
@@ -182,7 +182,7 @@ async function statusLinux(): Promise<void> {
   const installed = listResult.exitCode === 0 && listResult.stdout.includes(CRON_BEGIN);
 
   if (installed) {
-    printSuccess('Job installed (user crontab, every 12 hours)');
+    printSuccess('Job installed (user crontab, every hour)');
   } else {
     console.log(chalk.yellow('  ○  Job not installed.'));
     printHint('Run `aion cron install` to set it up.');
@@ -220,7 +220,7 @@ async function installWindows(nodePath: string, scriptPath: string): Promise<voi
     '/SC',
     'HOURLY',
     '/MO',
-    '12',
+    '1',
     '/F', // overwrite if exists
   ]);
   if (result.exitCode !== 0) {
@@ -299,7 +299,7 @@ export async function runCronInstall(): Promise<void> {
   }
 
   console.log();
-  printSuccess('Background token-refresh job installed (runs every 12 hours).');
+  printSuccess('Background token-refresh job installed (runs every hour).');
   console.log(chalk.dim(`  Log: ${CRON_LOG}`));
   console.log(chalk.dim('  Run `aion cron status` to check the last run.'));
   console.log(chalk.dim('  Run `aion cron uninstall` to remove it.'));

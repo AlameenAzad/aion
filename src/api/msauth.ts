@@ -114,8 +114,13 @@ export async function refreshAccessToken(
   }
 }
 
-/** Returns true if the JWT access token is expired or expires within `bufferSeconds`. */
-export function isTokenExpired(token: string, bufferSeconds = 300): boolean {
+/**
+ * Returns true if the JWT access token is expired or expires within `bufferSeconds`.
+ *
+ * Default buffer is 2 hours (7200s): the cron runs hourly and SPA access tokens
+ * last ~1 hour, so we must refresh proactively to avoid any gap in coverage.
+ */
+export function isTokenExpired(token: string, bufferSeconds = 7200): boolean {
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()) as {
       exp?: number;

@@ -29,7 +29,7 @@ const validConfig: Config = {
   dyce: {
     clientId: 'client-id',
     scope: 'api://dyce/.default offline_access',
-    token: makeJwt(Math.floor(Date.now() / 1000) + 3600), // expires in 1 hour
+    token: makeJwt(Math.floor(Date.now() / 1000) + 10800), // expires in 3 hours (outside 2h buffer)
     refreshToken: 'refresh-token',
     instance: 'inst',
     company: 'co',
@@ -47,8 +47,8 @@ beforeEach(() => {
 // ── isTokenExpired ────────────────────────────────────────────────────────────
 
 describe('isTokenExpired', () => {
-  it('returns false for a token expiring in 1 hour', () => {
-    const token = makeJwt(Math.floor(Date.now() / 1000) + 3600);
+  it('returns false for a token expiring in 3 hours (outside 2h buffer)', () => {
+    const token = makeJwt(Math.floor(Date.now() / 1000) + 10800);
     expect(isTokenExpired(token)).toBe(false);
   });
 
@@ -57,13 +57,13 @@ describe('isTokenExpired', () => {
     expect(isTokenExpired(token)).toBe(true);
   });
 
-  it('returns true for a token expiring within the default buffer (5 min)', () => {
-    const token = makeJwt(Math.floor(Date.now() / 1000) + 60); // expires in 1 min
+  it('returns true for a token expiring within the default buffer (2 hours)', () => {
+    const token = makeJwt(Math.floor(Date.now() / 1000) + 3600); // expires in 1 hour
     expect(isTokenExpired(token)).toBe(true);
   });
 
   it('returns false when expiry is just outside the buffer', () => {
-    const token = makeJwt(Math.floor(Date.now() / 1000) + 400); // > 300s buffer
+    const token = makeJwt(Math.floor(Date.now() / 1000) + 7300); // > 7200s buffer
     expect(isTokenExpired(token)).toBe(false);
   });
 
@@ -312,7 +312,7 @@ describe('refreshAccessToken (HTTP error handling)', () => {
 
 describe('resolveDyceToken', () => {
   it('returns the cached token without refreshing when it is still valid', async () => {
-    const freshToken = makeJwt(Math.floor(Date.now() / 1000) + 3600);
+    const freshToken = makeJwt(Math.floor(Date.now() / 1000) + 10800); // 3h — outside 2h buffer
     const config = { ...validConfig, dyce: { ...validConfig.dyce, token: freshToken } };
 
     const result = await resolveDyceToken(config);
