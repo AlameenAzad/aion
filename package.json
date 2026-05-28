@@ -1,6 +1,6 @@
 {
   "name": "aion-sync",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Sync time entries from Tempo (Jira) to Dyce — eternal, automatic, effortless.",
   "type": "commonjs",
   "license": "MIT",
