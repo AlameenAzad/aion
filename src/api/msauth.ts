@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Config } from '../config/schema';
 import { updateConfig } from '../config/manager';
+import { keychainAvailable, setSecret, SECRET_ACCOUNTS } from '../config/keychain';
 
 const AUTHORITY = 'https://login.microsoftonline.com/organizations/oauth2/v2.0';
 
@@ -153,6 +154,20 @@ export async function resolveDyceToken(config: Config): Promise<string> {
         'Run `aion setup` to re-authenticate.',
       err
     );
+  }
+
+  // Write new tokens directly to keychain first, before calling updateConfig.
+  // updateConfig calls loadConfig() internally, which overlays keychain values
+  // over the in-memory config — if the keychain still holds the old refresh token
+  // at that point, it would overwrite the new one. Writing here ensures the
+  // keychain is already up-to-date before that read-back happens.
+  if (keychainAvailable) {
+    try {
+      setSecret(SECRET_ACCOUNTS.dyceAccessToken, tokenData.access_token);
+      setSecret(SECRET_ACCOUNTS.dyceRefreshToken, tokenData.refresh_token);
+    } catch {
+      // Non-fatal: updateConfig/saveConfig will persist to the JSON file as fallback.
+    }
   }
 
   updateConfig({
