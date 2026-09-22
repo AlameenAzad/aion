@@ -39,9 +39,12 @@ jobs:
         run: npm run build && chmod +x dist/index.js
 
       - name: Publish to npm
+        # Trusted Publishing (OIDC) — npm exchanges this job's GitHub Actions
+        # id-token for a short-lived publish credential automatically, given
+        # the `id-token: write` permission above. No NPM_TOKEN needed; this
+        # only works once aion-sync's npm package settings list this exact
+        # repo + workflow filename as a trusted publisher.
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
