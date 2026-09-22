@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/alameenazad/aion"
+    "url": "https://github.com/AlameenAzad/aion"
   },
-  "homepage": "https://github.com/alameenazad/aion#readme",
+  "homepage": "https://github.com/AlameenAzad/aion#readme",
   "bugs": {
-    "url": "https://github.com/alameenazad/aion/issues"
+    "url": "https://github.com/AlameenAzad/aion/issues"
   },
   "keywords": [
     "cli",
