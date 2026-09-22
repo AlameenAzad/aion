@@ -37,7 +37,9 @@ program
 // ── aion status ──────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Check connectivity to all configured services (Tempo, Jira, Dyce, Paser/PeopleForce)')
+  .description(
+    'Check connectivity to all configured services (Tempo, Jira, Dyce, Paser/PeopleForce)'
+  )
   .action(async () => {
     if (!configExists()) {
       console.error(

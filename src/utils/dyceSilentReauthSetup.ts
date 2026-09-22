@@ -1,9 +1,4 @@
-import {
-  promptList,
-  promptConfirm,
-  printSuccess,
-  printWarning,
-} from '../ui/prompts';
+import { promptList, promptConfirm, printSuccess, printWarning } from '../ui/prompts';
 import { showInfoBox } from '../ui/banner';
 import { withSpinner } from '../ui/spinner';
 import { loadConfig, saveConfig } from '../config/manager';
@@ -31,7 +26,7 @@ export async function configureDyceSilentReauth(clientId: string, scope: string)
     "re-authenticates itself using your browser's Microsoft SSO session",
     '(the same one you use to log into Dyce/PeopleForce).',
     '',
-    'No extra login needed: this just reads your browser\'s existing SSO',
+    "No extra login needed: this just reads your browser's existing SSO",
     'session cookie whenever the refresh token dies.',
   ]);
 

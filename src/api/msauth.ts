@@ -245,7 +245,11 @@ export async function resolveDyceToken(config: Config): Promise<string> {
   let silentErr: unknown;
   if (!tokenData && browser && !config.dyce.silentReauthDisabled) {
     try {
-      tokenData = await silentlyReauthenticateDyce(config.dyce.clientId, config.dyce.scope, browser);
+      tokenData = await silentlyReauthenticateDyce(
+        config.dyce.clientId,
+        config.dyce.scope,
+        browser
+      );
     } catch (err) {
       // Never let this escape raw — this runs unattended in the hourly cron,
       // where a bare CookieAccessDeniedError/axios error would kill the job

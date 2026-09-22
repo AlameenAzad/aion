@@ -15,7 +15,12 @@ import {
   timeToSeconds,
 } from '../utils/date';
 import { findMappings, isVacationEntry, extractProjectKey } from '../utils/mapping';
-import { LeaveCase, findCasesMatchingDate, isSupportedLeaveType, isApprovedOrCompleted } from '../utils/leave';
+import {
+  LeaveCase,
+  findCasesMatchingDate,
+  isSupportedLeaveType,
+  isApprovedOrCompleted,
+} from '../utils/leave';
 import { parsePaserCase } from '../utils/paser';
 import { parsePeopleForceCase } from '../utils/peopleforce';
 import { resolvePeopleForceCookie } from '../utils/browserCookies';
@@ -351,7 +356,10 @@ export async function runSync(opts: SyncOptions): Promise<void> {
           value: 'vacation' as const,
         },
         { name: `Sick Leave (requires ${leaveProviderLabel} ID)`, value: 'sickLeave' as const },
-        { name: `Public / Bank Holiday (no ${leaveProviderLabel} ID)`, value: 'publicHoliday' as const },
+        {
+          name: `Public / Bank Holiday (no ${leaveProviderLabel} ID)`,
+          value: 'publicHoliday' as const,
+        },
       ]);
       item.specialEntryType = specialEntryType;
 
@@ -396,7 +404,9 @@ export async function runSync(opts: SyncOptions): Promise<void> {
             );
           }
           console.log(
-            chalk.dim(`  Auto-matched ${leaveProviderLabel} request #${selected.id} (${selected.title})`)
+            chalk.dim(
+              `  Auto-matched ${leaveProviderLabel} request #${selected.id} (${selected.title})`
+            )
           );
           leaveRequestIdMap.set(item.worklog.tempoWorklogId, `#${selected.id}`);
         } else if (matchedCases.length > 1) {

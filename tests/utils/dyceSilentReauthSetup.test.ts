@@ -81,7 +81,9 @@ describe('configureDyceSilentReauth', () => {
   });
 
   it('defaults the confirm prompt to true when already enabled via dyce.browser', async () => {
-    mockedLoadConfig.mockReturnValue(baseConfig({ dyce: { ...baseConfig().dyce, browser: 'chrome' } }));
+    mockedLoadConfig.mockReturnValue(
+      baseConfig({ dyce: { ...baseConfig().dyce, browser: 'chrome' } })
+    );
     mockedPromptConfirm.mockResolvedValue(true);
     mockedPromptList.mockResolvedValue('chrome');
     mockedSilentlyReauthenticateDyce.mockResolvedValue(null);

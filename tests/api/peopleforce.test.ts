@@ -207,7 +207,9 @@ describe('PeopleForceClient', () => {
       });
       mockGet.mockResolvedValueOnce({
         data: FIXTURE_HTML,
-        request: { res: { responseUrl: 'https://kruschecompany.peopleforce.io/people/778503/leave' } },
+        request: {
+          res: { responseUrl: 'https://kruschecompany.peopleforce.io/people/778503/leave' },
+        },
       });
 
       const rows = await client.getLeaveCases();
@@ -236,7 +238,9 @@ describe('PeopleForceClient', () => {
   });
 
   it('response error interceptor handles network error (no response) and missing config', async () => {
-    await expect(capturedResponseErrorCb?.({ config: { url: '/dashboards' } })).rejects.toBeDefined();
+    await expect(
+      capturedResponseErrorCb?.({ config: { url: '/dashboards' } })
+    ).rejects.toBeDefined();
     await expect(capturedResponseErrorCb?.({ response: { status: 500 } })).rejects.toBeDefined();
   });
 });

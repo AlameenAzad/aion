@@ -466,7 +466,9 @@ export async function runSetup(): Promise<void> {
         peopleforceBrowser = result.browser;
         peopleforceManualCookie = result.manualCookie;
       } else {
-        printWarning('PeopleForce not verified — you can reconfigure later with `aion config edit-peopleforce`.');
+        printWarning(
+          'PeopleForce not verified — you can reconfigure later with `aion config edit-peopleforce`.'
+        );
       }
     } else {
       printHint('Skipping leave platform setup — you can run `aion setup` again later to add one.');
@@ -479,7 +481,12 @@ export async function runSetup(): Promise<void> {
       leaveProvider,
       paser:
         paserBaseUrl && paserEmail && paserPassword && paserAccountId
-          ? { baseUrl: paserBaseUrl, email: paserEmail, password: paserPassword, accountId: paserAccountId }
+          ? {
+              baseUrl: paserBaseUrl,
+              email: paserEmail,
+              password: paserPassword,
+              accountId: paserAccountId,
+            }
           : undefined,
       peopleforce:
         peopleforceBaseUrl && (peopleforceBrowser || peopleforceManualCookie)
@@ -724,7 +731,12 @@ export async function runSetup(): Promise<void> {
     },
     paser:
       paserBaseUrl && paserEmail && paserPassword && paserAccountId
-        ? { baseUrl: paserBaseUrl, email: paserEmail, password: paserPassword, accountId: paserAccountId }
+        ? {
+            baseUrl: paserBaseUrl,
+            email: paserEmail,
+            password: paserPassword,
+            accountId: paserAccountId,
+          }
         : undefined,
     peopleforce:
       peopleforceBaseUrl && (peopleforceBrowser || peopleforceManualCookie)

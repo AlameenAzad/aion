@@ -88,9 +88,7 @@ export function runConfigList(): void {
   }
 
   console.log(chalk.bold('\nActive Leave Provider:'));
-  console.log(
-    `  ${config.leaveProvider ?? chalk.dim('(none selected)')}`
-  );
+  console.log(`  ${config.leaveProvider ?? chalk.dim('(none selected)')}`);
   console.log(chalk.dim('  Switch provider : aion config set-leave-provider'));
 
   console.log(chalk.bold('\nProject Mappings:'));

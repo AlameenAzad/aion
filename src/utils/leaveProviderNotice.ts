@@ -27,7 +27,11 @@ export async function ensureLeaveProviderNotice(config: Config): Promise<Config>
   );
 
   if (choice === 'paser') {
-    const updated: Config = { ...loadConfig(), leaveProvider: 'paser', peopleforceNoticeShown: true };
+    const updated: Config = {
+      ...loadConfig(),
+      leaveProvider: 'paser',
+      peopleforceNoticeShown: true,
+    };
     saveConfig(updated);
     return updated;
   }

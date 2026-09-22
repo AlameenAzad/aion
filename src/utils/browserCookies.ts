@@ -28,7 +28,10 @@ type FirefoxFamilyBrowser = Extract<SupportedBrowser, 'firefox' | 'zen'>;
  * distinguished per-fork here; Windows falls back to stock Firefox's path
  * (best-effort/unverified, same caveat as the rest of the Windows support).
  */
-const FIREFOX_FAMILY_APP_DIR: Record<FirefoxFamilyBrowser, { darwin: string; linux: string; win32: string }> = {
+const FIREFOX_FAMILY_APP_DIR: Record<
+  FirefoxFamilyBrowser,
+  { darwin: string; linux: string; win32: string }
+> = {
   firefox: {
     darwin: 'Library/Application Support/Firefox',
     linux: '.mozilla/firefox',
@@ -41,7 +44,10 @@ const FIREFOX_FAMILY_APP_DIR: Record<FirefoxFamilyBrowser, { darwin: string; lin
   },
 };
 
-const CHROMIUM_COOKIE_PATH: Record<ChromiumBrowser, { darwin: string; linux: string; win32: string }> = {
+const CHROMIUM_COOKIE_PATH: Record<
+  ChromiumBrowser,
+  { darwin: string; linux: string; win32: string }
+> = {
   chrome: {
     darwin: 'Library/Application Support/Google/Chrome/Default/Cookies',
     linux: '.config/google-chrome/Default/Cookies',
@@ -372,7 +378,7 @@ function runSqlite(dbPath: string, query: string): string[] {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'EPERM' || code === 'EACCES') {
         throw new CookieAccessDeniedError(
-          'macOS is blocking access to your browser\'s cookie storage. Grant Full Disk Access ' +
+          "macOS is blocking access to your browser's cookie storage. Grant Full Disk Access " +
             'to the terminal app running aion: System Settings → Privacy & Security → Full Disk ' +
             'Access, then restart your terminal and try again.'
         );
@@ -572,4 +578,3 @@ function getFirefoxCookie(browser: FirefoxFamilyBrowser, domain: string): string
     ? Array.from(cookies, ([name, value]) => `${name}=${value}`).join('; ')
     : null;
 }
-

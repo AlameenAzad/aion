@@ -144,7 +144,7 @@ describe('Firefox/Zen cookie read (integration)', () => {
     // must not be truncated at the first pipe.
     sqliteExec(
       dbPath,
-      "INSERT INTO moz_cookies (name, value, host, lastAccessed) VALUES " +
+      'INSERT INTO moz_cookies (name, value, host, lastAccessed) VALUES ' +
         "('session_id', 'stale-no-pipe', '.co.example.com', 500), " +
         "('session_id', 'fresh|with|pipes', '.co.example.com', 1000), " +
         "('other_cookie', 'plainvalue', 'co.example.com', 700);"

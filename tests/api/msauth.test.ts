@@ -428,7 +428,12 @@ describe('resolveDyceToken', () => {
       headers: { location: 'https://app.dyce.cloud/?code=silent-code' },
     });
     mockedAxios.post.mockResolvedValueOnce({
-      data: { access_token: newToken, refresh_token: 'silent-refresh', expires_in: 3600, token_type: 'Bearer' },
+      data: {
+        access_token: newToken,
+        refresh_token: 'silent-refresh',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      },
     });
 
     const result = await resolveDyceToken(config);

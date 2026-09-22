@@ -33,7 +33,9 @@ async function verifyCookie(baseUrl: string, cookie: string): Promise<boolean> {
     printSuccess('PeopleForce connection successful');
     return true;
   } catch (err) {
-    printError(`PeopleForce connection failed: ${err instanceof Error ? err.message : String(err)}`);
+    printError(
+      `PeopleForce connection failed: ${err instanceof Error ? err.message : String(err)}`
+    );
     return false;
   }
 }
@@ -104,7 +106,7 @@ export async function promptPeopleForceSetup(
 
   showInfoBox('How should aion get your PeopleForce session?', [
     `${chalk.bold('Auto-detect (headless)')} — aion reads the session cookie straight out of`,
-    'your browser\'s own encrypted cookie storage, the same way you\'re already',
+    "your browser's own encrypted cookie storage, the same way you're already",
     'logged in. Nothing to repeat: it re-reads live on every sync, so a normal',
     'browser login keeps working automatically. Tradeoff: on macOS this needs',
     '"Full Disk Access" granted to your terminal app (System Settings → Privacy',
@@ -113,7 +115,7 @@ export async function promptPeopleForceSetup(
     '',
     `${chalk.bold('Manual paste')} — you copy the "Cookie" header once from DevTools and`,
     'aion stores it in your OS keychain. Needs zero special permissions and',
-    'always works, but the session eventually expires and you\'ll need to paste',
+    "always works, but the session eventually expires and you'll need to paste",
     'a fresh one (no refresh token, unlike Dyce).',
     '',
     `You can switch modes anytime with: ${chalk.cyan('aion config edit-peopleforce')}`,
@@ -122,8 +124,14 @@ export async function promptPeopleForceSetup(
   const mode = await promptList<'manual' | 'auto'>(
     'How should aion get your PeopleForce session?',
     [
-      { name: 'Paste session cookie manually (no OS permissions needed, recommended)', value: 'manual' },
-      { name: 'Auto-detect from browser (headless — needs OS permissions on macOS)', value: 'auto' },
+      {
+        name: 'Paste session cookie manually (no OS permissions needed, recommended)',
+        value: 'manual',
+      },
+      {
+        name: 'Auto-detect from browser (headless — needs OS permissions on macOS)',
+        value: 'auto',
+      },
     ]
   );
 

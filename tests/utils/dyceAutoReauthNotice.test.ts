@@ -86,7 +86,10 @@ describe('ensureDyceAutoReauthNotice', () => {
     const result = await ensureDyceAutoReauthNotice(config);
     expect(result.dyce.browser).toBe('zen');
     expect(mockedSaveConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ dyceAutoReauthNoticeShown: true, dyce: expect.objectContaining({ browser: 'zen' }) })
+      expect.objectContaining({
+        dyceAutoReauthNoticeShown: true,
+        dyce: expect.objectContaining({ browser: 'zen' }),
+      })
     );
   });
 });

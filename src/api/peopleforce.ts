@@ -57,9 +57,7 @@ export class PeopleForceClient {
         return res;
       },
       (err) => {
-        verboseLog(
-          `[PeopleForce] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`
-        );
+        verboseLog(`[PeopleForce] ERROR ${err?.response?.status ?? 'network'} ${err?.config?.url}`);
         return Promise.reject(err);
       }
     );
