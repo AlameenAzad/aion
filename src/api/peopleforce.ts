@@ -1,3 +1,14 @@
+import { File } from 'node:buffer';
+
+// cheerio's undici dependency assumes a global File constructor (present by
+// default on Node 20+). Node 18 doesn't attach one to globalThis, so simply
+// requiring cheerio throws "ReferenceError: File is not defined" — confirmed
+// live against node:18.20.8. node:buffer has exported File since Node 18, so
+// polyfill from there before cheerio is imported.
+if (typeof globalThis.File === 'undefined') {
+  (globalThis as unknown as { File: typeof File }).File = File;
+}
+
 import axios, { AxiosInstance } from 'axios';
 import * as cheerio from 'cheerio';
 import { applyRetryInterceptor } from '../utils/retry';
