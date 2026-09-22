@@ -251,16 +251,25 @@ describe('schemaVersion', () => {
 });
 
 describe('migrateRawConfig', () => {
-  it('stamps schemaVersion: 1 on objects without it', () => {
+  it('stamps schemaVersion: 1 on objects without it, then bumps to 2 with peopleforceNoticeShown: false', () => {
     const input = { foo: 'bar' };
     const output = migrateRawConfig(input) as Record<string, unknown>;
-    expect(output.schemaVersion).toBe(1);
+    expect(output.schemaVersion).toBe(2);
+    expect(output.peopleforceNoticeShown).toBe(false);
   });
 
-  it('does not overwrite an existing schemaVersion', () => {
+  it('defaults peopleforceNoticeShown: false on configs that already had schemaVersion: 1', () => {
     const input = { foo: 'bar', schemaVersion: 1 };
     const output = migrateRawConfig(input) as Record<string, unknown>;
-    expect(output.schemaVersion).toBe(1);
+    expect(output.schemaVersion).toBe(2);
+    expect(output.peopleforceNoticeShown).toBe(false);
+  });
+
+  it('leaves configs that already have peopleforceNoticeShown untouched', () => {
+    const input = { foo: 'bar', schemaVersion: 2, peopleforceNoticeShown: true };
+    const output = migrateRawConfig(input) as Record<string, unknown>;
+    expect(output.schemaVersion).toBe(2);
+    expect(output.peopleforceNoticeShown).toBe(true);
   });
 
   it('returns non-object values unchanged', () => {

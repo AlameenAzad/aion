@@ -4,7 +4,11 @@ import { TempoClient } from '../api/tempo';
 import { JiraClient } from '../api/jira';
 import { DyceClient } from '../api/dyce';
 import { PaserClient } from '../api/paser';
+import { PeopleForceClient } from '../api/peopleforce';
+import { resolvePeopleForceCookie } from '../utils/browserCookies';
 import { resolveDyceToken, isTokenExpired } from '../api/msauth';
+import { ensureLeaveProviderNotice } from '../utils/leaveProviderNotice';
+import { ensureDyceAutoReauthNotice } from '../utils/dyceAutoReauthNotice';
 import { startSpinner } from '../ui/spinner';
 
 interface ServiceStatus {
@@ -53,9 +57,17 @@ export async function runStatus(): Promise<void> {
   let config;
   try {
     config = loadConfig();
+    // These notices prompt interactively — skip them on a non-TTY (e.g. piped
+    // into a health check) so `status` stays a pure, non-blocking read.
+    if (process.stdin.isTTY) {
+      config = await ensureLeaveProviderNotice(config);
+      config = await ensureDyceAutoReauthNotice(config);
+    }
   } catch (err) {
     console.error(
-      chalk.red(`\n  Failed to load config: ${err instanceof Error ? err.message : String(err)}\n`)
+      chalk.red(
+        `\n  Failed to load config or run setup notice: ${err instanceof Error ? err.message : String(err)}\n`
+      )
     );
     process.exit(1);
   }
@@ -132,6 +144,30 @@ export async function runStatus(): Promise<void> {
     }
   } else {
     results.push({ name: 'Paser', ok: true, detail: 'not configured (optional)' });
+  }
+
+  // ── PeopleForce (optional) ──────────────────────────────────────────────────
+  if (config.peopleforce) {
+    const pfSpinner = startSpinner('Checking PeopleForce…');
+    try {
+      const cookie = await resolvePeopleForceCookie(config.peopleforce);
+      const peopleforce = new PeopleForceClient(config.peopleforce.baseUrl, cookie);
+      await peopleforce.testConnection();
+      pfSpinner.succeed(chalk.green('PeopleForce — connected'));
+      results.push({
+        name: 'PeopleForce',
+        ok: true,
+        detail: config.peopleforce.manualCookie
+          ? 'session cookie (manually pasted)'
+          : `session cookie from ${config.peopleforce.browser}`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pfSpinner.fail(chalk.red(`PeopleForce — ${msg}`));
+      results.push({ name: 'PeopleForce', ok: false, detail: msg });
+    }
+  } else {
+    results.push({ name: 'PeopleForce', ok: true, detail: 'not configured (optional)' });
   }
 
   printStatus(results);

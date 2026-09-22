@@ -13,13 +13,15 @@ import {
 } from '../ui/prompts';
 import { DyceMapping } from '../config/schema';
 import { DyceClient } from '../api/dyce';
-import { resolveDyceToken, refreshAccessToken } from '../api/msauth';
+import { resolveDyceToken, refreshAccessToken, silentlyReauthenticateDyce } from '../api/msauth';
 import { withSpinner } from '../ui/spinner';
 import { showInfoBox } from '../ui/banner';
 import { TempoClient, getTempoBaseUrl } from '../api/tempo';
 import { JiraClient } from '../api/jira';
 import { PaserClient } from '../api/paser';
 import { configureLeaveTypeMappings } from '../utils/leaveSetup';
+import { promptPeopleForceSetup } from '../utils/peopleforceSetup';
+import { configureDyceSilentReauth } from '../utils/dyceSilentReauthSetup';
 
 export function runConfigList(): void {
   const config = loadConfig();
@@ -48,6 +50,17 @@ export function runConfigList(): void {
   console.log(
     `  Token           : ${config.dyce.token ? maskToken(config.dyce.token) : '(will refresh on next use)'}`
   );
+  const dyceSilentBrowser = config.dyce.browser ?? config.peopleforce?.browser;
+  console.log(
+    `  Auto re-auth    : ${
+      config.dyce.browser
+        ? `enabled — via ${config.dyce.browser}`
+        : dyceSilentBrowser
+          ? `enabled — via ${dyceSilentBrowser} (reusing PeopleForce's browser)`
+          : 'disabled'
+    }`
+  );
+  console.log(chalk.dim('  Change with     : aion config re-auth-dyce'));
 
   console.log(chalk.bold('\nPaser:'));
   if (config.paser) {
@@ -58,6 +71,27 @@ export function runConfigList(): void {
   } else {
     console.log(chalk.dim('  (not configured)'));
   }
+
+  console.log(chalk.bold('\nPeopleForce:'));
+  if (config.peopleforce) {
+    console.log(`  Base URL        : ${config.peopleforce.baseUrl}`);
+    console.log(
+      `  Cookie mode     : ${
+        config.peopleforce.manualCookie
+          ? 'manual paste (configured)'
+          : `auto-detect, headless — from ${config.peopleforce.browser}`
+      }`
+    );
+    console.log(chalk.dim('  Switch mode     : aion config edit-peopleforce'));
+  } else {
+    console.log(chalk.dim('  (not configured — run `aion config edit-peopleforce`)'));
+  }
+
+  console.log(chalk.bold('\nActive Leave Provider:'));
+  console.log(
+    `  ${config.leaveProvider ?? chalk.dim('(none selected)')}`
+  );
+  console.log(chalk.dim('  Switch provider : aion config set-leave-provider'));
 
   console.log(chalk.bold('\nProject Mappings:'));
   if (config.mappings.length === 0) {
@@ -468,12 +502,97 @@ export async function runConfigEditPaser(): Promise<void> {
   printSuccess('Paser credentials updated');
 }
 
+// ── aion config edit-peopleforce ──────────────────────────────────────────────
+
+export async function runConfigEditPeopleForce(): Promise<void> {
+  const config = loadConfig();
+
+  printStep(1, 1, 'Update PeopleForce connection');
+
+  const result = await promptPeopleForceSetup(config.peopleforce?.baseUrl);
+  if (!result) {
+    printWarning('PeopleForce not updated.');
+    return;
+  }
+
+  saveConfig({ ...config, peopleforce: result });
+  printSuccess('PeopleForce connection updated');
+}
+
+// ── aion config set-leave-provider ────────────────────────────────────────────
+
+export async function runConfigSetLeaveProvider(): Promise<void> {
+  const config = loadConfig();
+
+  printStep(1, 1, 'Choose active leave provider');
+  console.log(chalk.dim(`  Currently active: ${config.leaveProvider ?? '(none)'}\n`));
+
+  const choice = await promptList('Which leave-tracking platform do you use?', [
+    { name: 'Paser', value: 'paser' as const },
+    { name: 'PeopleForce', value: 'peopleforce' as const },
+  ]);
+
+  if (choice === 'paser' && !config.paser) {
+    printWarning('Paser is not configured yet — run `aion config edit-paser` first.');
+    return;
+  }
+  if (choice === 'peopleforce' && !config.peopleforce) {
+    const result = await promptPeopleForceSetup();
+    if (!result) {
+      printWarning('PeopleForce not configured — leave provider unchanged.');
+      return;
+    }
+    saveConfig({ ...config, peopleforce: result, leaveProvider: 'peopleforce' });
+    printSuccess('Leave provider set to PeopleForce');
+    return;
+  }
+
+  saveConfig({ ...config, leaveProvider: choice });
+  printSuccess(`Leave provider set to ${choice}`);
+}
+
 // ── aion config re-auth-dyce ──────────────────────────────────────────────────
 
 export async function runConfigReAuthDyce(): Promise<void> {
   const config = loadConfig();
 
   printStep(1, 1, 'Re-authenticate Dyce');
+
+  const silentBrowser = config.dyce.browser ?? config.peopleforce?.browser;
+  if (silentBrowser) {
+    const tryNow = await promptConfirm(
+      `Silent re-auth is set up (via ${silentBrowser}). Try it now instead of re-pasting from DevTools?`,
+      true
+    );
+    if (tryNow) {
+      try {
+        const tokenData = await withSpinner(`Re-authenticating via ${silentBrowser}…`, () =>
+          silentlyReauthenticateDyce(config.dyce.clientId, config.dyce.scope, silentBrowser)
+        );
+        if (tokenData) {
+          saveConfig({
+            ...config,
+            dyce: {
+              ...config.dyce,
+              token: tokenData.access_token,
+              refreshToken: tokenData.refresh_token,
+            },
+          });
+          printSuccess('Dyce re-authenticated silently — no DevTools needed');
+          return;
+        }
+        printWarning(
+          `Could not silently re-authenticate via ${silentBrowser} (no active SSO session found). ` +
+            'Falling back to the manual DevTools paste below.'
+        );
+      } catch (err) {
+        printWarning(
+          `Silent re-auth failed: ${err instanceof Error ? err.message : String(err)}. ` +
+            'Falling back to the manual DevTools paste below.'
+        );
+      }
+    }
+  }
 
   showInfoBox('Finding your Dyce OAuth2 credentials from DevTools', [
     'Open DevTools (F12) → Network tab → filter by "token".',
@@ -529,4 +648,6 @@ export async function runConfigReAuthDyce(): Promise<void> {
   });
 
   printSuccess('Dyce credentials updated');
+
+  await configureDyceSilentReauth(dyceClientId, effectiveScope);
 }

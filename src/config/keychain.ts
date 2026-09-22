@@ -13,6 +13,7 @@ export const SECRET_ACCOUNTS = {
   dyceRefreshToken: 'dyce-refresh-token',
   dyceAccessToken: 'dyce-access-token',
   paserPassword: 'paser-password',
+  peopleforceCookie: 'peopleforce-cookie',
 } as const;
 
 export type SecretAccount = (typeof SECRET_ACCOUNTS)[keyof typeof SECRET_ACCOUNTS];

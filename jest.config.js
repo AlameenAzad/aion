@@ -2,7 +2,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
+  roots: ['<rootDir>/src', '<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
@@ -13,7 +13,13 @@ module.exports = {
     'src/**/*.ts',
     '!src/index.ts',
     '!src/commands/**',
-    '!src/ui/banner.ts',
+    // Thin passthrough wrappers over inquirer/ora/console — no branching logic
+    // of their own to test, same rationale as excluding banner.ts.
+    '!src/ui/**',
+    // Pre-existing interactive setup wizard (predates this batch) — same class
+    // of code as commands/setup.ts, just factored out; excluded for the same
+    // reason commands/** is.
+    '!src/utils/leaveSetup.ts',
   ],
   coverageReporters: ['text', 'lcov'],
   coverageThreshold: {

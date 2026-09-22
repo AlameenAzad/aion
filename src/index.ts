@@ -12,6 +12,8 @@ import {
   runConfigEditTempo,
   runConfigEditJira,
   runConfigEditPaser,
+  runConfigEditPeopleForce,
+  runConfigSetLeaveProvider,
   runConfigReAuthDyce,
 } from './commands/config';
 import { runConfigExport, runConfigImport } from './commands/configExport';
@@ -35,7 +37,7 @@ program
 // ── aion status ──────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Check connectivity to all configured services (Tempo, Jira, Dyce, Paser)')
+  .description('Check connectivity to all configured services (Tempo, Jira, Dyce, Paser/PeopleForce)')
   .action(async () => {
     if (!configExists()) {
       console.error(
@@ -211,6 +213,32 @@ configCmd
   .action(async () => {
     try {
       await runConfigEditPaser();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+configCmd
+  .command('edit-peopleforce')
+  .description(
+    'Update PeopleForce base URL, and switch between auto-detect (headless) and manual-paste cookie modes'
+  )
+  .action(async () => {
+    try {
+      await runConfigEditPeopleForce();
+    } catch (err) {
+      console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
+      process.exit(1);
+    }
+  });
+
+configCmd
+  .command('set-leave-provider')
+  .description('Switch the active leave provider between Paser and PeopleForce')
+  .action(async () => {
+    try {
+      await runConfigSetLeaveProvider();
     } catch (err) {
       console.error(chalk.red(`\n  Error: ${err instanceof Error ? err.message : String(err)}\n`));
       process.exit(1);

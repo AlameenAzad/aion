@@ -1,9 +1,18 @@
 import axios from 'axios';
+import * as crypto from 'crypto';
 import { Config } from '../config/schema';
 import { updateConfig } from '../config/manager';
 import { keychainAvailable, setSecret, SECRET_ACCOUNTS } from '../config/keychain';
+import { getSessionCookieForDomain, SupportedBrowser } from '../utils/browserCookies';
 
 const AUTHORITY = 'https://login.microsoftonline.com/organizations/oauth2/v2.0';
+
+/**
+ * Dyce's SPA app registration only allows this origin as a redirect URI —
+ * verified live: an /authorize call with prompt=none and a valid AAD SSO
+ * cookie 302s back here with ?code=... in the query (response_mode=query).
+ */
+const DYCE_REDIRECT_URI = 'https://app.dyce.cloud';
 
 function withCause(message: string, cause: unknown): Error {
   const error = new Error(message) as Error & { cause?: unknown };
@@ -115,6 +124,82 @@ export async function refreshAccessToken(
   }
 }
 
+function base64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Silently re-authenticates against Azure AD using the browser's own AAD SSO
+ * session cookie (`login.microsoftonline.com`) — no user interaction. Mirrors
+ * exactly what Dyce's own MSAL client does in the browser when its cached
+ * refresh token has expired: an `/authorize` call with `prompt=none` succeeds
+ * (redirects with a fresh `code`) as long as the AAD session itself is still
+ * alive, which lasts far longer than the 24h absolute lifetime of the SPA's
+ * refresh tokens. Verified live against a real session on 2026-09-22.
+ *
+ * Returns null (never throws for "not silently authenticatable") when AAD
+ * doesn't redirect with a code — e.g. the SSO session itself has also expired
+ * and a real interactive login is required.
+ */
+export async function silentlyReauthenticateDyce(
+  clientId: string,
+  scope: string,
+  browser: SupportedBrowser
+): Promise<MsTokenResponse | null> {
+  const cookie = await getSessionCookieForDomain(browser, 'login.microsoftonline.com');
+  if (!cookie) return null;
+
+  const codeVerifier = base64url(crypto.randomBytes(32));
+  const codeChallenge = base64url(crypto.createHash('sha256').update(codeVerifier).digest());
+
+  const authorizeUrl =
+    `${AUTHORITY}/authorize?` +
+    new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: DYCE_REDIRECT_URI,
+      scope,
+      response_mode: 'query',
+      prompt: 'none',
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    }).toString();
+
+  const authRes = await axios.get<string>(authorizeUrl, {
+    headers: { Cookie: cookie },
+    maxRedirects: 0,
+    validateStatus: () => true,
+  });
+
+  const location = authRes.headers['location'];
+  if (authRes.status !== 302 || !location) return null;
+
+  const code = new URL(location, DYCE_REDIRECT_URI).searchParams.get('code');
+  if (!code) return null;
+
+  const tokenRes = await axios.post<MsTokenResponse>(
+    `${AUTHORITY}/token`,
+    new URLSearchParams({
+      client_id: clientId,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: DYCE_REDIRECT_URI,
+      code_verifier: codeVerifier,
+      scope,
+    }),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: 'https://app.dyce.cloud',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'Sec-Fetch-Dest': 'empty',
+      },
+    }
+  );
+  return tokenRes.data;
+}
+
 /**
  * Returns true if the JWT access token is expired or expires within `bufferSeconds`.
  *
@@ -141,7 +226,8 @@ export async function resolveDyceToken(config: Config): Promise<string> {
     return config.dyce.token;
   }
 
-  let tokenData: MsTokenResponse;
+  let tokenData: MsTokenResponse | null = null;
+  let refreshErr: unknown;
   try {
     tokenData = await refreshAccessToken(
       config.dyce.clientId,
@@ -149,10 +235,39 @@ export async function resolveDyceToken(config: Config): Promise<string> {
       config.dyce.scope
     );
   } catch (err) {
+    refreshErr = err;
+  }
+
+  // The refresh token itself has a 24h absolute lifetime on Dyce's SPA app
+  // registration — once it's dead, fall back to silently re-authenticating
+  // off the browser's still-alive AAD SSO session, same as the browser does.
+  const browser = config.dyce.browser ?? config.peopleforce?.browser;
+  let silentErr: unknown;
+  if (!tokenData && browser && !config.dyce.silentReauthDisabled) {
+    try {
+      tokenData = await silentlyReauthenticateDyce(config.dyce.clientId, config.dyce.scope, browser);
+    } catch (err) {
+      // Never let this escape raw — this runs unattended in the hourly cron,
+      // where a bare CookieAccessDeniedError/axios error would kill the job
+      // with a message that hides both the original refresh failure and the
+      // `re-auth-dyce` hint below (and cron often can't read the browser's
+      // cookie DB at all — no Full Disk Access grant on a launchd identity).
+      silentErr = err;
+    }
+  }
+
+  if (!tokenData) {
+    const silentErrMsg = silentErr instanceof Error ? silentErr.message : String(silentErr);
+    const hint = browser
+      ? `Silent re-auth via ${browser} also failed${silentErr ? ` (${silentErrMsg})` : ' (your Microsoft SSO session may have expired too)'}. ` +
+        'Run `aion config re-auth-dyce` to re-authenticate manually.'
+      : 'Run `aion config re-auth-dyce` to re-authenticate — it can now also set up automatic ' +
+        'silent re-auth via your browser so this stops happening.';
     throw withCause(
-      `Dyce token refresh failed: ${err instanceof Error ? err.message : String(err)}. ` +
-        'Run `aion setup` to re-authenticate.',
-      err
+      `Dyce token refresh failed: ${
+        refreshErr instanceof Error ? refreshErr.message : String(refreshErr)
+      }. ${hint}`,
+      refreshErr
     );
   }
 

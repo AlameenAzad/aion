@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SUPPORTED_BROWSERS } from '../utils/browserCookies';
 
 const DyceJobInfoSchema = z.object({
   customerNo: z.string().min(1),
@@ -66,6 +67,24 @@ export const ConfigSchema = z.object({
     /** The user's Dyce resource UUID */
     resourceId: z.string().optional(),
     resourceName: z.string().optional(),
+    /**
+     * Browser to read the `login.microsoftonline.com` AAD SSO session cookie
+     * from when the refresh token itself has expired (Dyce's SPA app
+     * registration issues refresh tokens with a 24h absolute lifetime, so the
+     * hourly refresh cron will eventually hit this). Falls back to
+     * `peopleforce.browser` when unset, since it's normally the same browser
+     * session. See resolveDyceToken in src/api/msauth.ts.
+     */
+    browser: z.enum(SUPPORTED_BROWSERS).optional(),
+    /**
+     * Explicit opt-out of silent re-auth, separate from `browser` being unset.
+     * Needed because `browser` here can be undefined while silent re-auth is
+     * still effectively enabled via the `peopleforce.browser` fallback in
+     * resolveDyceToken — without this flag there's no way to say "no, really,
+     * don't read my browser's cookies for this" short of also disabling
+     * PeopleForce's own browser-based cookie read.
+     */
+    silentReauthDisabled: z.boolean().optional(),
   }),
   paser: z
     .object({
@@ -77,6 +96,33 @@ export const ConfigSchema = z.object({
       accountId: z.number().int().positive(),
     })
     .optional(),
+  peopleforce: z
+    .object({
+      /** PeopleForce base URL, e.g. "https://yourcompany.peopleforce.io" */
+      baseUrl: z.string().url(),
+      /**
+       * Browser to auto-read the PeopleForce session cookie from. Optional —
+       * only used when manualCookie isn't set. Auto-read needs macOS Full
+       * Disk Access, which is often blocked on managed/MDM company laptops;
+       * manualCookie is the permission-free fallback.
+       */
+      browser: z.enum(SUPPORTED_BROWSERS).optional(),
+      /**
+       * Session cookie pasted by the user from DevTools (Network tab → any
+       * request to the domain → Request Headers → Cookie), used verbatim as
+       * the Cookie header. Takes priority over browser-based auto-read.
+       * Unlike Paser's password, this has no refresh mechanism — it expires
+       * and needs re-pasting periodically via `aion config edit-peopleforce`.
+       */
+      manualCookie: z.string().min(1).optional(),
+    })
+    .optional(),
+  /** Which leave provider is active for this sync run — determines which of the two blocks above is used */
+  leaveProvider: z.enum(['paser', 'peopleforce']).optional(),
+  /** Whether the user has already been shown the one-time "PeopleForce is now available" notice */
+  peopleforceNoticeShown: z.boolean().optional(),
+  /** Whether the user has already been shown the one-time "Dyce silent re-auth is now available" notice */
+  dyceAutoReauthNoticeShown: z.boolean().optional(),
   /** Per-project mappings from Jira project key → Dyce job info */
   mappings: z.array(DyceMappingSchema),
   /** Jira project key prefixes that indicate vacation/sick leave, e.g. ["VAC", "LEAVE"] */
@@ -98,7 +144,7 @@ export const ConfigSchema = z.object({
     .optional(),
   /** Description to send to Dyce for government-approved official public holidays */
   publicHolidayDescription: z.string().optional(),
-  /** Schema version — used for future migrations. Always written as 1 for now. */
+  /** Schema version — used for migrations. 1 = pre-PeopleForce, 2 = adds leaveProvider/peopleforceNoticeShown. */
   schemaVersion: z.number().int().default(1),
 });
 

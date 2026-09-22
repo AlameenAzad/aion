@@ -4,6 +4,7 @@ import { loadSyncedIds, markSynced } from '../config/synclog';
 import { TempoClient } from '../api/tempo';
 import { JiraClient } from '../api/jira';
 import { PaserClient } from '../api/paser';
+import { PeopleForceClient } from '../api/peopleforce';
 import { DyceClient, DyceTimeRecording } from '../api/dyce';
 import { resolveDyceToken } from '../api/msauth';
 import {
@@ -14,12 +15,12 @@ import {
   timeToSeconds,
 } from '../utils/date';
 import { findMappings, isVacationEntry, extractProjectKey } from '../utils/mapping';
-import {
-  ParsedPaserCase,
-  findCasesMatchingDate,
-  isSupportedLeaveType,
-  parsePaserCase,
-} from '../utils/paser';
+import { LeaveCase, findCasesMatchingDate, isSupportedLeaveType, isApprovedOrCompleted } from '../utils/leave';
+import { parsePaserCase } from '../utils/paser';
+import { parsePeopleForceCase } from '../utils/peopleforce';
+import { resolvePeopleForceCookie } from '../utils/browserCookies';
+import { ensureLeaveProviderNotice } from '../utils/leaveProviderNotice';
+import { ensureDyceAutoReauthNotice } from '../utils/dyceAutoReauthNotice';
 import { printWorklogTable, printSyncSummary, TableRow } from '../ui/table';
 import { startSpinner } from '../ui/spinner';
 import { promptText, promptConfirm, promptList, printWarning } from '../ui/prompts';
@@ -30,16 +31,9 @@ interface SyncOptions extends DateFlags {
   dryRun?: boolean;
 }
 
-function isApprovedOrCompleted(item: ParsedPaserCase): boolean {
-  const state = (item.state ?? '').toLowerCase();
-  const stage = (item.stage ?? '').toLowerCase();
-  const approved = state === 'approved' || stage === 'approved';
-  const completed = state === 'completed' || stage === 'completed';
-  return approved || completed;
-}
-
 export async function runSync(opts: SyncOptions): Promise<void> {
-  const config = loadConfig();
+  let config = await ensureLeaveProviderNotice(loadConfig());
+  config = await ensureDyceAutoReauthNotice(config);
   const { from, to } = getDateRange(opts);
   const isDryRun = opts.dryRun === true;
 
@@ -156,9 +150,14 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     );
   }
 
-  // ── Fetch matching leave requests from Paser (optional) ─────────────────────
-  const paserMatchesByWorklogId = new Map<number, ParsedPaserCase[]>();
-  if (config.paser) {
+  // ── Fetch matching leave requests from the active leave provider (optional) ──
+  const leaveProviderLabel = config.leaveProvider === 'peopleforce' ? 'PeopleForce' : 'Paser';
+  const leaveMatchesByWorklogId = new Map<number, LeaveCase[]>();
+
+  // Undefined leaveProvider (not yet decided — e.g. "ask me later" on the
+  // one-time notice) falls back to Paser when configured, matching pre-notice
+  // behavior so vacation matching doesn't silently go dark in the meantime.
+  if (config.paser && (config.leaveProvider === 'paser' || !config.leaveProvider)) {
     const paserSpinner = startSpinner('Fetching leave requests from Paser…');
     try {
       const paser = new PaserClient(config.paser.baseUrl);
@@ -180,7 +179,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
 
       const parsed = rawCases
         .map((item) => parsePaserCase(item))
-        .filter((item): item is ParsedPaserCase => item !== null)
+        .filter((item): item is LeaveCase => item !== null)
         .filter((item) => isSupportedLeaveType(item.leaveType));
 
       for (const wl of worklogs) {
@@ -188,19 +187,54 @@ export async function runSync(opts: SyncOptions): Promise<void> {
         if (!isVacationEntry(issueKey, config.vacationPrefixes)) continue;
         const matches = findCasesMatchingDate(parsed, wl.startDate);
         if (matches.length > 0) {
-          paserMatchesByWorklogId.set(wl.tempoWorklogId, matches);
+          leaveMatchesByWorklogId.set(wl.tempoWorklogId, matches);
         }
       }
 
       paserSpinner.succeed(
         chalk.green(
-          `Fetched ${rawCases.length} Paser request(s), matched ${paserMatchesByWorklogId.size} vacation/sick worklog(s)`
+          `Fetched ${rawCases.length} Paser request(s), matched ${leaveMatchesByWorklogId.size} vacation/sick worklog(s)`
         )
       );
     } catch (err) {
       paserSpinner.warn(
         chalk.yellow(
           `Paser lookup failed: ${err instanceof Error ? err.message : String(err)}. Falling back to manual Paser ID entry.`
+        )
+      );
+    }
+  } else if (config.leaveProvider === 'peopleforce' && config.peopleforce) {
+    const pfSpinner = startSpinner('Fetching leave requests from PeopleForce…');
+    try {
+      const cookie = await resolvePeopleForceCookie(config.peopleforce);
+      const peopleforce = new PeopleForceClient(config.peopleforce.baseUrl, cookie);
+      // getLeaveCases has no server-side date filter (see api/peopleforce.ts) — it
+      // returns everything on the page, findCasesMatchingDate below does the filtering.
+      const rawCases = await peopleforce.getLeaveCases();
+
+      const parsed = rawCases
+        .map((item) => parsePeopleForceCase(item))
+        .filter((item): item is LeaveCase => item !== null)
+        .filter((item) => isSupportedLeaveType(item.leaveType));
+
+      for (const wl of worklogs) {
+        const issueKey = issueKeyMap.get(wl.issue.id) ?? `ISSUE-${wl.issue.id}`;
+        if (!isVacationEntry(issueKey, config.vacationPrefixes)) continue;
+        const matches = findCasesMatchingDate(parsed, wl.startDate);
+        if (matches.length > 0) {
+          leaveMatchesByWorklogId.set(wl.tempoWorklogId, matches);
+        }
+      }
+
+      pfSpinner.succeed(
+        chalk.green(
+          `Fetched ${rawCases.length} PeopleForce request(s), matched ${leaveMatchesByWorklogId.size} vacation/sick worklog(s)`
+        )
+      );
+    } catch (err) {
+      pfSpinner.warn(
+        chalk.yellow(
+          `PeopleForce lookup failed: ${err instanceof Error ? err.message : String(err)}. Falling back to manual ID entry.`
         )
       );
     }
@@ -302,7 +336,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   }
 
   // ── Handle special leave/holiday entries ─────────────────────────────────────
-  const paserMap = new Map<number, string>(); // tempoWorklogId → paserRequestId
+  const leaveRequestIdMap = new Map<number, string>(); // tempoWorklogId → leave provider request ID
 
   for (const item of toSync) {
     if (isVacationEntry(item.issueKey, config.vacationPrefixes)) {
@@ -312,9 +346,12 @@ export async function runSync(opts: SyncOptions): Promise<void> {
       );
 
       const specialEntryType = await promptList('  What type of entry is this?', [
-        { name: 'Vacation (annual leave — requires Paser ID)', value: 'vacation' as const },
-        { name: 'Sick Leave (requires Paser ID)', value: 'sickLeave' as const },
-        { name: 'Public / Bank Holiday (no Paser ID)', value: 'publicHoliday' as const },
+        {
+          name: `Vacation (annual leave — requires ${leaveProviderLabel} ID)`,
+          value: 'vacation' as const,
+        },
+        { name: `Sick Leave (requires ${leaveProviderLabel} ID)`, value: 'sickLeave' as const },
+        { name: `Public / Bank Holiday (no ${leaveProviderLabel} ID)`, value: 'publicHoliday' as const },
       ]);
       item.specialEntryType = specialEntryType;
 
@@ -349,7 +386,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
       }
 
       if (specialEntryType === 'vacation' || specialEntryType === 'sickLeave') {
-        const matchedCases = paserMatchesByWorklogId.get(item.worklog.tempoWorklogId) ?? [];
+        const matchedCases = leaveMatchesByWorklogId.get(item.worklog.tempoWorklogId) ?? [];
 
         if (matchedCases.length === 1) {
           const selected = matchedCases[0];
@@ -359,16 +396,16 @@ export async function runSync(opts: SyncOptions): Promise<void> {
             );
           }
           console.log(
-            chalk.dim(`  Auto-matched Paser request #${selected.id} (${selected.title})`)
+            chalk.dim(`  Auto-matched ${leaveProviderLabel} request #${selected.id} (${selected.title})`)
           );
-          paserMap.set(item.worklog.tempoWorklogId, `#${selected.id}`);
+          leaveRequestIdMap.set(item.worklog.tempoWorklogId, `#${selected.id}`);
         } else if (matchedCases.length > 1) {
           printWarning(
-            `Multiple Paser requests match ${item.worklog.startDate}. Please choose the correct one.`
+            `Multiple ${leaveProviderLabel} requests match ${item.worklog.startDate}. Please choose the correct one.`
           );
 
           const selected = await promptList(
-            '  Select matching Paser request:',
+            `  Select matching ${leaveProviderLabel} request:`,
             matchedCases.map((candidate) => {
               const status = `${candidate.state || 'n/a'} / ${candidate.stage || 'n/a'}`;
               return {
@@ -385,15 +422,16 @@ export async function runSync(opts: SyncOptions): Promise<void> {
             );
           }
 
-          paserMap.set(item.worklog.tempoWorklogId, `#${selected}`);
+          leaveRequestIdMap.set(item.worklog.tempoWorklogId, `#${selected}`);
         } else {
-          const paserId = await promptText(
-            `  Enter Paser.io request ID for this entry (e.g. #23234):`,
+          const requestId = await promptText(
+            `  Enter ${leaveProviderLabel} request ID for this entry (e.g. #23234):`,
             '',
             (v) =>
-              v.trim().length > 0 || 'Paser request ID is required for vacation/sick leave entries'
+              v.trim().length > 0 ||
+              `${leaveProviderLabel} request ID is required for vacation/sick leave entries`
           );
-          paserMap.set(item.worklog.tempoWorklogId, paserId.trim());
+          leaveRequestIdMap.set(item.worklog.tempoWorklogId, requestId.trim());
         }
       }
     }
@@ -427,15 +465,15 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     const mapping = item.selectedMapping ?? item.mappingCandidates[0]!;
     const summary = issueSummaryMap.get(issueKey) ?? worklog.description ?? '';
     const isSpecialEntry = isVacationEntry(issueKey, config.vacationPrefixes);
-    const needsPaserId =
+    const needsLeaveRequestId =
       item.specialEntryType === 'vacation' || item.specialEntryType === 'sickLeave';
-    const paserId = paserMap.get(worklog.tempoWorklogId);
+    const leaveRequestId = leaveRequestIdMap.get(worklog.tempoWorklogId);
 
     // Build description
     let description = `${issueKey}: ${summary}`;
-    if (needsPaserId && paserId) {
-      // For vacation/sick-leave entries the Dyce description should be only the Paser request id.
-      description = paserId;
+    if (needsLeaveRequestId && leaveRequestId) {
+      // For vacation/sick-leave entries the Dyce description should be only the leave request id.
+      description = leaveRequestId;
     } else if (item.specialEntryType === 'publicHoliday') {
       description =
         config.publicHolidayDescription?.trim() || 'Government approved official holiday';

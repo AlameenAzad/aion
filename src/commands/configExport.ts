@@ -22,6 +22,9 @@ function stripSecrets(obj: Record<string, unknown>): Record<string, unknown> {
     paser: obj.paser
       ? { ...(obj.paser as Record<string, unknown>), password: undefined }
       : undefined,
+    peopleforce: obj.peopleforce
+      ? { ...(obj.peopleforce as Record<string, unknown>), manualCookie: undefined }
+      : undefined,
   };
 }
 
@@ -113,7 +116,8 @@ export async function runConfigImport(filePath: string): Promise<void> {
     !!incoming.tempo?.token ||
     !!incoming.jira?.token ||
     !!incoming.dyce?.refreshToken ||
-    !!incoming.paser?.password;
+    !!incoming.paser?.password ||
+    !!incoming.peopleforce?.manualCookie;
 
   if (!hasSecrets) {
     printWarning(
@@ -147,6 +151,10 @@ export async function runConfigImport(filePath: string): Promise<void> {
           incoming.paser && !incoming.paser.password && current.paser
             ? { ...incoming.paser, password: current.paser.password }
             : incoming.paser,
+        peopleforce:
+          incoming.peopleforce && !incoming.peopleforce.manualCookie && current.peopleforce
+            ? { ...incoming.peopleforce, manualCookie: current.peopleforce.manualCookie }
+            : incoming.peopleforce,
       };
       // Re-validate merged result as full Config
       saveConfig(merged as Parameters<typeof saveConfig>[0]);

@@ -12,10 +12,15 @@ let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
 const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => {
   capturedRequestCb = cb;
 });
+// TempoClient registers its own verbose-logging interceptor FIRST, then
+// applyRetryInterceptor registers a second one — only capture the first call,
+// otherwise these vars end up holding retry's callbacks instead of tempo.ts's.
 const responseInterceptorUse = jest.fn(
   (successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
-    capturedResponseSuccessCb = successCb;
-    capturedResponseErrorCb = errorCb;
+    if (!capturedResponseSuccessCb) {
+      capturedResponseSuccessCb = successCb;
+      capturedResponseErrorCb = errorCb;
+    }
   }
 );
 
@@ -188,6 +193,11 @@ describe('TempoClient verbose interceptors', () => {
 
   it('response error interceptor handles network error (no response)', async () => {
     const err = { config: { url: '/4/worklogs/user/acc1' } };
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles a missing config too', async () => {
+    const err = { response: { status: 500 } };
     await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
   });
 });

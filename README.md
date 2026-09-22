@@ -32,9 +32,10 @@ Project site: https://alameenazad.github.io/aion/
 - Uses Jira enhanced search (`/rest/api/3/search/jql`) with batching to reduce duplicate lookups
 - Maps Jira projects → Dyce customers / jobs / tasks (configured once)
 - Detects vacation, sick leave, and public holiday entries — each routed to a dedicated Dyce target
-- Auto-matches Paser.io requests by date range for vacation and sick leave
+- Auto-matches leave requests by date range for vacation and sick leave, from either **Paser** or **PeopleForce**
 - Silently skips already-synced entries (no duplicates, ever)
-- Keeps your Dyce session alive automatically via a background token-refresh job (`aion cron install`)
+- Keeps your Dyce session alive automatically via a background token-refresh job (`aion cron install`) — and can now **silently re-authenticate itself** using your browser's existing Microsoft SSO session when the refresh token's 24h lifetime runs out, no manual DevTools paste required
+- Reads browser session cookies (PeopleForce login, Microsoft SSO) from Chrome, Edge, Brave, Firefox, or Zen
 - Rich terminal UI: ASCII banner, spinners, colorized preview table
 
 ---
@@ -70,7 +71,7 @@ Project site: https://alameenazad.github.io/aion/
 | Node.js | ≥ 18 |
 | Tempo | Cloud (API v4) |
 | Jira | Cloud (API v3) |
-| Paser | Cloud |
+| Paser **or** PeopleForce | Cloud |
 | Dyce | Cloud |
 
 ---
@@ -108,7 +109,7 @@ aion sync
 
 ### `aion setup`
 
-Interactive wizard that walks you through connecting Tempo, Jira, Paser, and Dyce.
+Interactive wizard that walks you through connecting Tempo, Jira, a leave platform (Paser or PeopleForce), and Dyce.
 
 ```
 Steps:
@@ -116,7 +117,8 @@ Steps:
   [2/7] Jira API          — base URL, email, token (also fetches your accountId)
   [3/7] Dyce API          — client_id, scope, refresh_token (from DevTools),
                             x-instance, x-company, resource auto-detection
-  [4/7] Paser API         — base URL, email, password, account selection
+  [4/7] Leave platform    — choose Paser (email/password) or PeopleForce (browser
+                            session cookie, auto-detected or pasted manually), or skip
   [5/7] Project mappings  — Jira project key → Dyce Customer / Job / Job Task
   [6/7] Leave detection   — which Jira tickets mean vacation/leave, then configure a
                             separate Dyce target for Vacation, Sick Leave, and Public Holiday
@@ -137,7 +139,7 @@ Check connectivity to all configured services at once — useful for debugging a
 aion status
 ```
 
-Shows a `✓` / `✗` row for Tempo, Jira, Dyce, and Paser (if configured), plus the Dyce token expiry. Exits with code `1` if any service fails.
+Shows a `✓` / `✗` row for Tempo, Jira, Dyce, and whichever leave platform is configured (Paser or PeopleForce), plus the Dyce token expiry. Exits with code `1` if any service fails.
 
 ---
 
@@ -161,9 +163,9 @@ aion sync --from 2026-05-01 --to 2026-05-14
 2. Fetches worklogs from Tempo (user-scoped)
 3. Enriches with Jira issue titles using batched `/search/jql` lookups
 4. Shows a preview table with status for each entry
-5. Auto-matches Paser.io vacation/sick requests by date range
-6. If multiple Paser requests match one day, prompts you to choose
-7. If no Paser request matches, asks for manual Paser request ID
+5. Auto-matches vacation/sick requests by date range (from Paser or PeopleForce, whichever is configured)
+6. If multiple requests match one day, prompts you to choose
+7. If no request matches, asks for a manual request ID
 8. Asks for confirmation, then POSTs to Dyce
 9. Marks synced IDs in `~/.aion/synced.json` (prevents duplicates)
 
@@ -189,17 +191,21 @@ aion preview --from 2026-04-01 --to 2026-04-30
 Manage your configuration without re-running the full wizard.
 
 ```bash
-aion config list            # show current config (tokens masked)
-aion config add-mapping     # add/update a Jira → Dyce project mapping
-aion config set-vacation    # update vacation/leave prefixes AND Dyce targets per leave type
-aion config edit-paser      # update Paser credentials/account
-aion config re-auth-dyce    # update Dyce token pair from a fresh refresh_token
-aion config export          # export config to a JSON file
+aion config list              # show current config (tokens masked)
+aion config add-mapping       # add/update a Jira → Dyce project mapping
+aion config set-vacation      # update vacation/leave prefixes AND Dyce targets per leave type
+aion config edit-tempo        # update Tempo token/region
+aion config edit-jira         # update Jira base URL/email/token
+aion config edit-paser        # update Paser credentials/account
+aion config edit-peopleforce  # update PeopleForce URL/browser/manual cookie
+aion config set-leave-provider  # switch between Paser and PeopleForce
+aion config re-auth-dyce      # re-authenticate Dyce (silently via browser SSO, or paste a fresh refresh_token)
+aion config export            # export config to a JSON file
 aion config export --file ~/backup.json --include-secrets  # include plaintext tokens
 aion config import backup.json  # import/merge config from a previously exported file
 ```
 
-`aion config re-auth-dyce` is the recommended recovery path when Dyce token refresh fails (for example after the refresh token has expired due to extended inactivity).
+`aion config re-auth-dyce` is the recommended recovery path when Dyce token refresh fails (for example after the refresh token has expired due to extended inactivity). If you've enabled automatic silent re-auth (see [Dyce auth troubleshooting](#dyce-auth-troubleshooting)), it tries that first — no DevTools required — before falling back to a manual paste.
 
 **Example `config list` output:**
 
@@ -248,13 +254,13 @@ Silently refreshes the Dyce access token using the stored refresh token and pers
 aion token-refresh
 ```
 
-You rarely need to run this manually — it's the command that the background job (installed by `aion cron install`) calls every 12 hours.
+You rarely need to run this manually — it's the command that the background job (installed by `aion cron install`) calls every hour.
 
 ---
 
 ### `aion cron`
 
-Manages the OS-level background job that keeps your Dyce session alive by running `aion token-refresh` every 12 hours. Because each successful token refresh issues a new refresh token and resets the 24-hour expiry window, this prevents the session from expiring during periods of inactivity.
+Manages the OS-level background job that keeps your Dyce **access token** fresh by running `aion token-refresh` every hour. Note this doesn't prevent the refresh token's own 24-hour absolute expiry — see [Dyce auth troubleshooting](#dyce-auth-troubleshooting) for that.
 
 ```bash
 aion cron install     # register the background job
@@ -266,9 +272,9 @@ aion cron status      # show whether it's installed and the last log line
 
 | Platform | Mechanism | Interval |
 |----------|-----------|----------|
-| macOS | `launchd` plist in `~/Library/LaunchAgents/` | every 12 h |
-| Linux | User crontab (`0 */12 * * *`) | every 12 h |
-| Windows | Task Scheduler (`schtasks`) | every 12 h |
+| macOS | `launchd` plist in `~/Library/LaunchAgents/` | every hour |
+| Linux | User crontab (`0 * * * *`) | every hour |
+| Windows | Task Scheduler (`schtasks`) | every hour |
 
 The job runs `aion token-refresh` and writes output (errors only) to `/tmp/aion-token-refresh.log`. You can tail that file to confirm the job is working.
 
@@ -318,14 +324,21 @@ On **macOS, Linux, and Windows**, API tokens and passwords are stored in the OS 
     "instance": "your-instance",
     "company": "your-company",
     "resourceNo": "EMP001",
-    "resourceId": "uuid-optional"
+    "resourceId": "uuid-optional",
+    "browser": "chrome" // optional — enables silent re-auth via browser SSO when the refresh token expires
   },
+  // Only one of "paser" / "peopleforce" is normally present — set by "leaveProvider" below.
   "paser": {
     "baseUrl": "https://app.paser.io",
     "email": "you@company.com",
     // password stored in OS Keychain
     "accountId": 90
   },
+  "peopleforce": {
+    "baseUrl": "https://yourcompany.peopleforce.io",
+    "browser": "firefox" // or omit and set "manualCookie" instead (stored in OS Keychain)
+  },
+  "leaveProvider": "paser", // or "peopleforce"
   "mappings": [
     {
       "jiraProjectKey": "PROJ",
@@ -378,7 +391,7 @@ If a worklog's Jira issue key matches any value in `vacationPrefixes` (e.g. `VAC
 
 **During sync you choose the leave type:**
 
-| Type | Paser ID required? | Dyce target |
+| Type | Leave request ID required? | Dyce target |
 |---|---|---|
 | Vacation | Yes | `leaveTypeMappings.vacation` |
 | Sick Leave | Yes | `leaveTypeMappings.sickLeave` |
@@ -386,12 +399,12 @@ If a worklog's Jira issue key matches any value in `vacationPrefixes` (e.g. `VAC
 
 Each leave type is logged to its **own** Dyce customer / project / task — completely separate from your regular work mappings. If no dedicated mapping is configured for a type, aion falls back to the regular Jira project mapping and shows a warning.
 
-**Paser auto-matching (Vacation & Sick Leave):**
+**Auto-matching (Vacation & Sick Leave), from whichever leave provider is active:**
 
-1. Looks up Paser requests where the worklog day falls inside the request date range
+1. Looks up Paser/PeopleForce requests where the worklog day falls inside the request date range
 2. Auto-uses the matching request ID when there is exactly one match
 3. Prompts you to choose when multiple requests overlap the same day
-4. Falls back to manual Paser ID entry when no match is found
+4. Falls back to manual request ID entry when no match is found
 
 If a matched request is not `Approved`/`Completed`, aion shows a warning but still lets you proceed.
 
@@ -409,31 +422,48 @@ To re-sync an entry, remove its ID from `~/.aion/synced.json`.
 
 ## Dyce auth troubleshooting
 
-### Preventing expiry (recommended)
+Dyce's OAuth refresh token (issued to its SPA app registration) has a **hard 24-hour absolute lifetime** — unlike a sliding-expiry token, refreshing it does *not* reset this window. Even with the background job refreshing your access token every hour, the refresh token itself will eventually die once a day.
 
-Dyce refresh tokens expire after 24 hours of inactivity. The best way to avoid this is to install the background refresh job:
+### Automatic silent re-auth (recommended)
 
-```bash
-aion cron install
-```
-
-This runs `aion token-refresh` every 12 hours, resetting the expiry window automatically. The setup wizard offers to do this for you at the end of first-run configuration.
-
-### Recovering from an expired session
-
-If `aion status` or `aion sync` reports a Dyce refresh failure such as `AADSTS700084`, run:
+Instead of needing a manual DevTools paste roughly once a day, aion can silently re-authenticate itself by reusing your browser's existing Microsoft/Azure AD SSO session — the same mechanism Dyce's own web app uses to renew itself without ever prompting you to log in again. Enable it with:
 
 ```bash
 aion config re-auth-dyce
 ```
 
-Then provide a fresh `refresh_token` from your normal Dyce browser session (DevTools → Network → token request payload).
+(also offered as a one-time prompt automatically, the first time you hit an expired session after upgrading to a version with this feature). Pick whichever browser you're logged into Dyce/Microsoft with — Chrome, Edge, Brave, Firefox, and Zen are all supported. From then on, `aion sync`/`status`/the token-refresh cron all fall back to this automatically whenever the stored refresh token has died — no interaction needed.
+
+Caveats:
+- Needs a live Microsoft SSO session in that browser (i.e. you're actually logged into Dyce/Microsoft somewhere).
+- On macOS, reading Chrome/Edge/Brave's cookie store needs "Full Disk Access" granted to the terminal app running aion (System Settings → Privacy & Security). Firefox/Zen don't need this.
+- If the *background cron job* hits an expired token and can't silently re-auth (e.g. it lacks the same OS permissions your interactive terminal has), it fails safely and logs the error — run `aion config re-auth-dyce` once yourself to recover.
+
+### Preventing access-token staleness
+
+Install the background refresh job so your Dyce access token stays fresh between syncs:
+
+```bash
+aion cron install
+```
+
+This runs `aion token-refresh` every hour. The setup wizard offers to do this for you at the end of first-run configuration.
+
+### Recovering manually
+
+If both the stored refresh token and silent re-auth fail (for example your browser's Microsoft SSO session has also expired), `aion status`/`aion sync` will say so — run:
+
+```bash
+aion config re-auth-dyce
+```
+
+and paste a fresh `refresh_token` from your normal Dyce browser session (DevTools → Network → token request payload) when prompted.
 
 **Common error codes:**
 
 | Code | Cause | Fix |
 |------|-------|-----|
-| `AADSTS700084` | SPA refresh token expired (24 h inactivity limit) | Run `aion config re-auth-dyce` with a fresh token; then install `aion cron` to prevent recurrence |
+| `AADSTS700084` | SPA refresh token expired (24 h absolute limit reached) | Run `aion config re-auth-dyce` — it tries silent re-auth first, then falls back to a manual token paste |
 | `AADSTS7000218` | Azure tenant requires client credentials for device-code flow | Use manual refresh-token mode via `aion config re-auth-dyce` |
 
 ---

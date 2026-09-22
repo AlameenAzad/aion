@@ -8,14 +8,19 @@ import {
 } from '../../src/api/msauth';
 import { updateConfig } from '../../src/config/manager';
 import { Config } from '../../src/config/schema';
+import { getSessionCookieForDomain } from '../../src/utils/browserCookies';
 
 jest.mock('axios');
 jest.mock('../../src/config/manager', () => ({
   updateConfig: jest.fn(),
 }));
+jest.mock('../../src/utils/browserCookies', () => ({
+  getSessionCookieForDomain: jest.fn(),
+}));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockedUpdateConfig = updateConfig as jest.Mock;
+const mockedGetSessionCookie = getSessionCookieForDomain as jest.Mock;
 
 // Helper: build a minimal JWT with a given exp claim
 function makeJwt(exp: number): string {
@@ -364,12 +369,116 @@ describe('resolveDyceToken', () => {
     expect(result).toBe(newToken);
   });
 
-  it('throws a helpful error when the refresh request fails', async () => {
+  it('throws a helpful error when the refresh request fails and no browser is configured', async () => {
     const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
     const config = { ...validConfig, dyce: { ...validConfig.dyce, token: expiredToken } };
 
     mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
 
-    await expect(resolveDyceToken(config)).rejects.toThrow('aion setup');
+    await expect(resolveDyceToken(config)).rejects.toThrow('aion config re-auth-dyce');
+  });
+
+  it('falls back to silent AAD re-auth via the browser cookie when the refresh token itself has expired', async () => {
+    const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
+    const newToken = makeJwt(Math.floor(Date.now() / 1000) + 3600);
+    const config = {
+      ...validConfig,
+      dyce: { ...validConfig.dyce, token: expiredToken, browser: 'chrome' as const },
+    };
+
+    mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant')); // refreshAccessToken fails
+    mockedGetSessionCookie.mockResolvedValueOnce('ESTSAUTH=abc; ESTSAUTHPERSISTENT=def');
+    mockedAxios.get.mockResolvedValueOnce({
+      status: 302,
+      headers: { location: 'https://app.dyce.cloud/?code=silent-code&state=xyz' },
+    });
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        access_token: newToken,
+        refresh_token: 'silent-refresh',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      },
+    });
+
+    const result = await resolveDyceToken(config);
+
+    expect(result).toBe(newToken);
+    expect(mockedGetSessionCookie).toHaveBeenCalledWith('chrome', 'login.microsoftonline.com');
+    expect(mockedUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dyce: expect.objectContaining({ token: newToken, refreshToken: 'silent-refresh' }),
+      })
+    );
+  });
+
+  it('falls back to peopleforce.browser when dyce.browser is unset', async () => {
+    const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
+    const newToken = makeJwt(Math.floor(Date.now() / 1000) + 3600);
+    const config = {
+      ...validConfig,
+      dyce: { ...validConfig.dyce, token: expiredToken },
+      peopleforce: { baseUrl: 'https://co.peopleforce.io', browser: 'edge' as const },
+    };
+
+    mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
+    mockedGetSessionCookie.mockResolvedValueOnce('ESTSAUTH=abc');
+    mockedAxios.get.mockResolvedValueOnce({
+      status: 302,
+      headers: { location: 'https://app.dyce.cloud/?code=silent-code' },
+    });
+    mockedAxios.post.mockResolvedValueOnce({
+      data: { access_token: newToken, refresh_token: 'silent-refresh', expires_in: 3600, token_type: 'Bearer' },
+    });
+
+    const result = await resolveDyceToken(config);
+
+    expect(result).toBe(newToken);
+    expect(mockedGetSessionCookie).toHaveBeenCalledWith('edge', 'login.microsoftonline.com');
+  });
+
+  it('throws when the browser cookie is missing (no fallback possible)', async () => {
+    const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
+    const config = {
+      ...validConfig,
+      dyce: { ...validConfig.dyce, token: expiredToken, browser: 'chrome' as const },
+    };
+
+    mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
+    mockedGetSessionCookie.mockResolvedValueOnce(null);
+
+    await expect(resolveDyceToken(config)).rejects.toThrow('aion config re-auth-dyce');
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it('throws when AAD does not silently authenticate (SSO session itself expired)', async () => {
+    const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
+    const config = {
+      ...validConfig,
+      dyce: { ...validConfig.dyce, token: expiredToken, browser: 'chrome' as const },
+    };
+
+    mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
+    mockedGetSessionCookie.mockResolvedValueOnce('ESTSAUTH=abc');
+    mockedAxios.get.mockResolvedValueOnce({ status: 200, headers: {} }); // lands on an interactive login page
+
+    await expect(resolveDyceToken(config)).rejects.toThrow('aion config re-auth-dyce');
+  });
+
+  it('throws when the silent-auth redirect has no code in it', async () => {
+    const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
+    const config = {
+      ...validConfig,
+      dyce: { ...validConfig.dyce, token: expiredToken, browser: 'chrome' as const },
+    };
+
+    mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
+    mockedGetSessionCookie.mockResolvedValueOnce('ESTSAUTH=abc');
+    mockedAxios.get.mockResolvedValueOnce({
+      status: 302,
+      headers: { location: 'https://app.dyce.cloud/?error=interaction_required' },
+    });
+
+    await expect(resolveDyceToken(config)).rejects.toThrow('aion config re-auth-dyce');
   });
 });

@@ -26,8 +26,9 @@ const SyncOrbit = () => {
 
   const sources = [
     { id: "tempo", label: "Tempo", angle: 200 },
-    { id: "jira",  label: "Jira",  angle: 250 },
-    { id: "paser", label: "Paser", angle: 290 },
+    { id: "jira",  label: "Jira",  angle: 230 },
+    { id: "paser", label: "Paser", angle: 260 },
+    { id: "peopleforce", label: "PeopleForce", angle: 290 },
   ];
   const dest = { id: "dyce", label: "Dyce", angle: 0 };
 
@@ -327,15 +328,15 @@ const Hero = () => {
             <span className="stack"><span className="italic">Flow</span> forever.</span>
           </h1>
           <p className="hero-lede">
-            Aion is the quiet bridge between Tempo, Jira, Paser and Dyce. Connect once, preview every run,
-            and write only what should be written — without the spreadsheet hangover.
+            Aion is the quiet bridge between Tempo, Jira, Paser or PeopleForce, and Dyce. Connect once, preview
+            every run, and write only what should be written — without the spreadsheet hangover.
           </p>
           <div className="hero-ctas">
             <a className="btn btn-primary" href="#run">Try a sync run <span className="chev">→</span></a>
             <a className="btn" href="https://github.com/alameenazad/aion">View source</a>
           </div>
           <div className="hero-meta">
-            <div><b>4</b> · providers</div>
+            <div><b>5</b> · providers</div>
             <div><b>5</b> · commands</div>
             <div><b>0</b> · duplicate writes</div>
             <div><b>~2 min</b> · setup</div>

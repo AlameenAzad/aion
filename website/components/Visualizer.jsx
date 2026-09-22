@@ -13,10 +13,11 @@ const PREVIEW_ROWS = [
 ];
 
 const PROVIDERS_INITIAL = [
-  { id: "tempo", name: "Tempo",  meta: "tempo.io",     state: "idle" },
-  { id: "jira",  name: "Jira",   meta: "api v3",       state: "idle" },
-  { id: "paser", name: "Paser",  meta: "v2 endpoints", state: "idle" },
-  { id: "dyce",  name: "Dyce",   meta: "token: 6d",    state: "idle" },
+  { id: "tempo",        name: "Tempo",        meta: "tempo.io",     state: "idle" },
+  { id: "jira",         name: "Jira",         meta: "api v3",       state: "idle" },
+  { id: "paser",        name: "Paser",        meta: "v2 endpoints", state: "idle" },
+  { id: "peopleforce",  name: "PeopleForce",  meta: "session sso",  state: "idle" },
+  { id: "dyce",         name: "Dyce",         meta: "token: 6d",    state: "idle" },
 ];
 
 // Tiny SVG sparkline (sync duration over last 14 runs)
@@ -286,7 +287,7 @@ const Visualizer = () => {
                   <div className="k">window</div><div className="v">today</div>
                   <div className="k">policy</div><div className="v">skip-existing</div>
                   <div className="k">enrich</div><div className="v">jira-titles</div>
-                  <div className="k">leave</div><div className="v">paser → routing</div>
+                  <div className="k">leave</div><div className="v">paser/pf → routing</div>
                   <div className="k">log</div><div className="v">~/.aion/synced.json</div>
                 </div>
               </div>
@@ -315,8 +316,8 @@ const Visualizer = () => {
         <div id="how" className="kicker-strip">
           <div className="kicker">
             <div className="num">01 / connect</div>
-            <h3>One auth, four providers</h3>
-            <p>Guided setup wires up Tempo, Jira, Paser and Dyce in under two minutes.</p>
+            <h3>One auth, five providers</h3>
+            <p>Guided setup wires up Tempo, Jira, Paser or PeopleForce, and Dyce in under two minutes.</p>
           </div>
           <div className="kicker">
             <div className="num">02 / preview</div>

@@ -3,7 +3,7 @@ const { useState: useStateFaq } = React;
 const FAQ_ITEMS = [
   {
     q: "What does Aion actually do?",
-    a: "It pulls your worklogs from Tempo, enriches them with Jira titles, applies leave routing from Paser, and writes the result into Dyce as time entries. Three commands, one source of truth."
+    a: "It pulls your worklogs from Tempo, enriches them with Jira titles, applies leave routing from Paser or PeopleForce, and writes the result into Dyce as time entries. Three commands, one source of truth."
   },
   {
     q: "Can I run it twice on the same day without creating duplicates?",
@@ -19,7 +19,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What happens to PTO and half-days?",
-    a: "Leave hours coming from Paser are routed to a configurable project mapping, so your timesheets reflect real availability instead of being padded to fit."
+    a: "Leave hours coming from Paser or PeopleForce are routed to a configurable project mapping, so your timesheets reflect real availability instead of being padded to fit."
   },
   {
     q: "Is my data going through a third-party service?",

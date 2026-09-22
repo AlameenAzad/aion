@@ -9,7 +9,8 @@ import {
   DyceMapping,
   DyceLeaveMapping,
 } from './schema';
-import { keychainAvailable, getSecret, setSecret, SECRET_ACCOUNTS } from './keychain';
+import { keychainAvailable, getSecret, setSecret, deleteSecret, SECRET_ACCOUNTS } from './keychain';
+import { SupportedBrowser } from '../utils/browserCookies';
 
 const CONFIG_DIR = path.join(os.homedir(), '.aion');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -37,6 +38,9 @@ function buildFileConfig(config: Config, stripSecrets: boolean): FileConfig {
     paser: config.paser
       ? { ...config.paser, password: strip ? undefined : config.paser.password }
       : undefined,
+    peopleforce: config.peopleforce
+      ? { ...config.peopleforce, manualCookie: strip ? undefined : config.peopleforce.manualCookie }
+      : undefined,
   };
 }
 
@@ -53,6 +57,15 @@ function persistSecretsToKeychain(config: Config): boolean {
     setSecret(SECRET_ACCOUNTS.dyceRefreshToken, config.dyce.refreshToken);
     if (config.dyce.token) setSecret(SECRET_ACCOUNTS.dyceAccessToken, config.dyce.token);
     if (config.paser?.password) setSecret(SECRET_ACCOUNTS.paserPassword, config.paser.password);
+    if (config.peopleforce?.manualCookie) {
+      setSecret(SECRET_ACCOUNTS.peopleforceCookie, config.peopleforce.manualCookie);
+    } else {
+      // Switching PeopleForce from manual-paste to browser auto-detect (or away
+      // from PeopleForce entirely) must clear the old cookie — otherwise
+      // resolveSecretsIntoConfig resurrects the stale one on every load and
+      // auto-detect never actually runs.
+      deleteSecret(SECRET_ACCOUNTS.peopleforceCookie);
+    }
     return true;
   } catch {
     return false;
@@ -73,6 +86,7 @@ function resolveSecretsIntoConfig(fileConfig: FileConfig): Config {
     const dyceRefreshToken = getSecret(SECRET_ACCOUNTS.dyceRefreshToken);
     const dyceAccessToken = getSecret(SECRET_ACCOUNTS.dyceAccessToken);
     const paserPassword = getSecret(SECRET_ACCOUNTS.paserPassword);
+    const peopleforceCookie = getSecret(SECRET_ACCOUNTS.peopleforceCookie);
 
     if (tempoToken) merged.tempo = { ...fileConfig.tempo, token: tempoToken };
     if (jiraToken) merged.jira = { ...fileConfig.jira, token: jiraToken };
@@ -85,6 +99,9 @@ function resolveSecretsIntoConfig(fileConfig: FileConfig): Config {
     }
     if (paserPassword && fileConfig.paser) {
       merged.paser = { ...fileConfig.paser, password: paserPassword };
+    }
+    if (peopleforceCookie && fileConfig.peopleforce) {
+      merged.peopleforce = { ...fileConfig.peopleforce, manualCookie: peopleforceCookie };
     }
   }
 
@@ -108,7 +125,8 @@ function migrateSecretsIfNeeded(fileConfig: FileConfig, config: Config): void {
     !!fileConfig.tempo?.token ||
     !!fileConfig.jira?.token ||
     !!fileConfig.dyce?.refreshToken ||
-    !!fileConfig.paser?.password;
+    !!fileConfig.paser?.password ||
+    !!fileConfig.peopleforce?.manualCookie;
 
   if (!hasSecretsInFile) return;
 
@@ -133,16 +151,20 @@ export function configExists(): boolean {
 }
 
 /**
- * Stamp schemaVersion: 1 on raw config objects that pre-date schema versioning.
+ * Stamp schemaVersion: 1 on raw config objects that pre-date schema versioning,
+ * then default peopleforceNoticeShown: false on configs that pre-date the
+ * PeopleForce provider option (schemaVersion 2) — this is what triggers the
+ * one-time "PeopleForce is now available" notice for existing Paser users.
  * Extend this function with additional migration steps as the schema evolves.
  */
 export function migrateRawConfig(raw: unknown): unknown {
   if (raw === null || typeof raw !== 'object') return raw;
   const obj = raw as Record<string, unknown>;
-  if (!('schemaVersion' in obj)) {
-    return { ...obj, schemaVersion: 1 };
+  const versioned = 'schemaVersion' in obj ? obj : { ...obj, schemaVersion: 1 };
+  if (!('peopleforceNoticeShown' in versioned)) {
+    return { ...versioned, peopleforceNoticeShown: false, schemaVersion: 2 };
   }
-  return raw;
+  return versioned;
 }
 
 export function loadConfig(): Config {
@@ -233,6 +255,12 @@ export interface SetupDraft {
     password: string;
     accountId: number;
   };
+  peopleforce?: {
+    baseUrl: string;
+    browser?: SupportedBrowser;
+    manualCookie?: string;
+  };
+  leaveProvider?: 'paser' | 'peopleforce';
   mappings?: DyceMapping[];
   vacationPrefixes?: string[];
   publicHolidayDescription?: string;

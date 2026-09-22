@@ -21,6 +21,8 @@ import { saveConfig, loadDraft, saveDraft, clearDraft, SetupDraft } from '../con
 import { keychainAvailable } from '../config/keychain';
 import { Config, DyceMapping } from '../config/schema';
 import { configureLeaveTypeMappings, LeaveTypeMappings } from '../utils/leaveSetup';
+import { promptPeopleForceSetup } from '../utils/peopleforceSetup';
+import { SupportedBrowser } from '../utils/browserCookies';
 import { runCronInstall } from './cron';
 
 /** Safely decode a URL-encoded string (e.g. "My%20Company" → "My Company"). */
@@ -39,7 +41,9 @@ export async function runSetup(): Promise<void> {
 
   console.log(chalk.bold('Welcome to aion setup!'));
   console.log(
-    chalk.dim('This wizard will configure your Tempo, Jira, Paser, and Dyce credentials.\n')
+    chalk.dim(
+      'This wizard will configure your Tempo, Jira, Dyce, and leave platform (Paser or PeopleForce) credentials.\n'
+    )
   );
 
   // ── Draft / resume ────────────────────────────────────────────────────────────
@@ -352,96 +356,139 @@ export async function runSetup(): Promise<void> {
   // dyceClient is available throughout step 4 (mapping resolution)
   const dyceClient = new DyceClient(dyceAccessToken, dyceInstance, dyceCompany);
 
-  // ── Step 4: Paser ───────────────────────────────────────────────────────────
-  printStep(4, TOTAL_STEPS, 'Paser API');
+  // ── Step 4: Leave Platform (Paser / PeopleForce) ─────────────────────────────
+  printStep(4, TOTAL_STEPS, 'Leave Platform');
 
-  let paserBaseUrl: string;
-  let paserEmail: string;
-  let paserPassword: string;
-  let paserAccountId: number;
+  let leaveProvider: 'paser' | 'peopleforce' | undefined;
+  let paserBaseUrl: string | undefined;
+  let paserEmail: string | undefined;
+  let paserPassword: string | undefined;
+  let paserAccountId: number | undefined;
+  let peopleforceBaseUrl: string | undefined;
+  let peopleforceBrowser: SupportedBrowser | undefined;
+  let peopleforceManualCookie: string | undefined;
 
-  if (resuming && draft.step >= 4 && draft.paser) {
-    ({
-      baseUrl: paserBaseUrl,
-      email: paserEmail,
-      password: paserPassword,
-      accountId: paserAccountId,
-    } = draft.paser);
-    printSuccess('  Paser credentials restored from draft');
+  if (resuming && draft.step >= 4 && (draft.paser || draft.peopleforce || draft.leaveProvider)) {
+    leaveProvider = draft.leaveProvider;
+    if (draft.paser) {
+      ({
+        baseUrl: paserBaseUrl,
+        email: paserEmail,
+        password: paserPassword,
+        accountId: paserAccountId,
+      } = draft.paser);
+    }
+    if (draft.peopleforce) {
+      ({
+        baseUrl: peopleforceBaseUrl,
+        browser: peopleforceBrowser,
+        manualCookie: peopleforceManualCookie,
+      } = draft.peopleforce);
+    }
+    printSuccess('  Leave platform choice restored from draft');
   } else {
-    printHint(
-      'Use your Paser email/password. aion will use session cookies automatically during sync.'
-    );
+    const choice = await promptList('Which leave-tracking platform do you use?', [
+      { name: 'Paser', value: 'paser' as const },
+      { name: 'PeopleForce', value: 'peopleforce' as const },
+      { name: 'Skip for now (configure later)', value: 'skip' as const },
+    ]);
 
-    paserBaseUrl = await promptText('Paser base URL:', 'https://app.paser.io', (v) => {
+    if (choice === 'paser') {
+      leaveProvider = 'paser';
+      printHint(
+        'Use your Paser email/password. aion will use session cookies automatically during sync.'
+      );
+
+      paserBaseUrl = await promptText('Paser base URL:', 'https://app.paser.io', (v) => {
+        try {
+          new URL(v);
+          return true;
+        } catch {
+          return 'Enter a valid URL';
+        }
+      });
+
+      paserEmail = await promptText('Paser email address:', jiraEmail, (v) =>
+        v.includes('@') ? true : 'Enter a valid email'
+      );
+
+      paserPassword = await promptPassword(
+        'Paser password:',
+        (v) => v.trim().length > 0 || 'Password cannot be empty'
+      );
+
       try {
-        new URL(v);
-        return true;
-      } catch {
-        return 'Enter a valid URL';
-      }
-    });
-
-    paserEmail = await promptText('Paser email address:', jiraEmail, (v) =>
-      v.includes('@') ? true : 'Enter a valid email'
-    );
-
-    paserPassword = await promptPassword(
-      'Paser password:',
-      (v) => v.trim().length > 0 || 'Password cannot be empty'
-    );
-
-    try {
-      const paserClient = new PaserClient(paserBaseUrl);
-      const auth = await withSpinner('Connecting to Paser…', () =>
-        paserClient.testConnection(paserEmail, paserPassword)
-      );
-
-      const userAccounts = (auth.user.accounts ?? []).map((a) => ({
-        accountId: a.accountId,
-        accountName: a.accountName,
-      }));
-
-      if (userAccounts.length === 0) {
-        throw new Error('No accounts returned from Paser for this user.');
-      }
-
-      if (userAccounts.length === 1) {
-        paserAccountId = userAccounts[0].accountId;
-      } else {
-        const selected = await promptList(
-          'Select Paser account:',
-          userAccounts.map((a) => ({
-            name: `${a.accountName} (${a.accountId})`,
-            value: String(a.accountId),
-          }))
+        const paserClient = new PaserClient(paserBaseUrl);
+        const auth = await withSpinner('Connecting to Paser…', () =>
+          paserClient.testConnection(paserEmail!, paserPassword!)
         );
-        paserAccountId = Number(selected);
+
+        const userAccounts = (auth.user.accounts ?? []).map((a) => ({
+          accountId: a.accountId,
+          accountName: a.accountName,
+        }));
+
+        if (userAccounts.length === 0) {
+          throw new Error('No accounts returned from Paser for this user.');
+        }
+
+        if (userAccounts.length === 1) {
+          paserAccountId = userAccounts[0].accountId;
+        } else {
+          const selected = await promptList(
+            'Select Paser account:',
+            userAccounts.map((a) => ({
+              name: `${a.accountName} (${a.accountId})`,
+              value: String(a.accountId),
+            }))
+          );
+          paserAccountId = Number(selected);
+        }
+
+        printSuccess(`Paser connection successful (accountId: ${paserAccountId})`);
+      } catch (err) {
+        printError(`Paser connection failed: ${err instanceof Error ? err.message : String(err)}`);
+        const proceed = await promptConfirm('Continue anyway?', false);
+        if (!proceed) process.exit(1);
+
+        const manualAccountId = await promptText(
+          'Enter your Paser accountId manually:',
+          '',
+          (v) => /^\d+$/.test(v.trim()) || 'Account ID must be a positive integer'
+        );
+        paserAccountId = Number(manualAccountId.trim());
       }
-
-      printSuccess(`Paser connection successful (accountId: ${paserAccountId})`);
-    } catch (err) {
-      printError(`Paser connection failed: ${err instanceof Error ? err.message : String(err)}`);
-      const proceed = await promptConfirm('Continue anyway?', false);
-      if (!proceed) process.exit(1);
-
-      const manualAccountId = await promptText(
-        'Enter your Paser accountId manually:',
-        '',
-        (v) => /^\d+$/.test(v.trim()) || 'Account ID must be a positive integer'
-      );
-      paserAccountId = Number(manualAccountId.trim());
+    } else if (choice === 'peopleforce') {
+      const result = await promptPeopleForceSetup();
+      if (result) {
+        leaveProvider = 'peopleforce';
+        peopleforceBaseUrl = result.baseUrl;
+        peopleforceBrowser = result.browser;
+        peopleforceManualCookie = result.manualCookie;
+      } else {
+        printWarning('PeopleForce not verified — you can reconfigure later with `aion config edit-peopleforce`.');
+      }
+    } else {
+      printHint('Skipping leave platform setup — you can run `aion setup` again later to add one.');
+      leaveProvider = undefined;
     }
 
     draft = {
       ...draft,
       step: 4,
-      paser: {
-        baseUrl: paserBaseUrl,
-        email: paserEmail,
-        password: paserPassword,
-        accountId: paserAccountId,
-      },
+      leaveProvider,
+      paser:
+        paserBaseUrl && paserEmail && paserPassword && paserAccountId
+          ? { baseUrl: paserBaseUrl, email: paserEmail, password: paserPassword, accountId: paserAccountId }
+          : undefined,
+      peopleforce:
+        peopleforceBaseUrl && (peopleforceBrowser || peopleforceManualCookie)
+          ? {
+              baseUrl: peopleforceBaseUrl,
+              browser: peopleforceBrowser,
+              manualCookie: peopleforceManualCookie,
+            }
+          : undefined,
     };
     saveDraft(draft);
   }
@@ -675,17 +722,26 @@ export async function runSetup(): Promise<void> {
       resourceId: dyceResourceId,
       resourceName: dyceResourceName,
     },
-    paser: {
-      baseUrl: paserBaseUrl,
-      email: paserEmail,
-      password: paserPassword,
-      accountId: paserAccountId,
-    },
+    paser:
+      paserBaseUrl && paserEmail && paserPassword && paserAccountId
+        ? { baseUrl: paserBaseUrl, email: paserEmail, password: paserPassword, accountId: paserAccountId }
+        : undefined,
+    peopleforce:
+      peopleforceBaseUrl && (peopleforceBrowser || peopleforceManualCookie)
+        ? {
+            baseUrl: peopleforceBaseUrl,
+            browser: peopleforceBrowser,
+            manualCookie: peopleforceManualCookie,
+          }
+        : undefined,
+    leaveProvider,
+    // The provider choice was just made explicitly in this wizard — no need to nag about it later.
+    peopleforceNoticeShown: true,
     mappings,
     vacationPrefixes,
     leaveTypeMappings: Object.keys(leaveTypeMappings).length > 0 ? leaveTypeMappings : undefined,
     publicHolidayDescription,
-    schemaVersion: 1,
+    schemaVersion: 2,
   };
 
   saveConfig(config);

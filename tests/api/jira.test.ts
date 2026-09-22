@@ -14,10 +14,15 @@ let capturedResponseErrorCb: ((err: unknown) => Promise<unknown>) | undefined;
 const requestInterceptorUse = jest.fn((cb: (cfg: unknown) => unknown) => {
   capturedRequestCb = cb;
 });
+// JiraClient registers its own verbose-logging interceptor FIRST, then
+// applyRetryInterceptor registers a second one — only capture the first call,
+// otherwise these vars end up holding retry's callbacks instead of jira.ts's.
 const responseInterceptorUse = jest.fn(
   (successCb: (res: unknown) => unknown, errorCb: (err: unknown) => Promise<unknown>) => {
-    capturedResponseSuccessCb = successCb;
-    capturedResponseErrorCb = errorCb;
+    if (!capturedResponseSuccessCb) {
+      capturedResponseSuccessCb = successCb;
+      capturedResponseErrorCb = errorCb;
+    }
   }
 );
 
@@ -201,6 +206,16 @@ describe('JiraClient verbose interceptors', () => {
   it('response error interceptor handles network error (no response)', async () => {
     // Exercises the `err?.response?.status ?? 'network'` branch
     const err = { config: { url: '/rest/api/3/myself' } }; // no .response
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles a missing config too', async () => {
+    const err = { response: { status: 500 } }; // no .config
+    await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
+  });
+
+  it('response error interceptor handles a completely empty error object', async () => {
+    const err = {};
     await expect(capturedResponseErrorCb!(err)).rejects.toBe(err);
   });
 });

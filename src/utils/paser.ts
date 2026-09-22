@@ -1,27 +1,16 @@
 import dayjs from 'dayjs';
 import { PaserCase } from '../api/paser';
-
-export type LeaveType = 'vacation' | 'sickLeave' | 'unknown';
-
-export interface ParsedPaserCase {
-  id: number;
-  title: string;
-  leaveType: LeaveType;
-  from: string;
-  to: string;
-  state?: string;
-  stage?: string;
-  updatedAt?: string;
-}
+import { LeaveCase, classifyLeaveType } from './leave';
 
 const DATE_RANGE_REGEX = /\((\d{2}\.\d{2}\.\d{4})\s*-\s*(\d{2}\.\d{2}\.\d{4})\)/;
 
-export function parsePaserCase(raw: PaserCase): ParsedPaserCase | null {
+export function parsePaserCase(raw: PaserCase): LeaveCase | null {
   const range = parseDateRangeFromTitle(raw.title);
   if (!range) return null;
 
   return {
     id: raw.id,
+    provider: 'paser',
     title: raw.title,
     leaveType: classifyLeaveType(raw.title),
     from: range.from,
@@ -30,15 +19,6 @@ export function parsePaserCase(raw: PaserCase): ParsedPaserCase | null {
     stage: raw.stage,
     updatedAt: raw.updatedAt,
   };
-}
-
-export function classifyLeaveType(title: string): LeaveType {
-  const normalized = title.trim().toLowerCase();
-
-  if (normalized.includes('vacation')) return 'vacation';
-  if (normalized.includes('sick')) return 'sickLeave';
-
-  return 'unknown';
 }
 
 export function parseDateRangeFromTitle(title: string): { from: string; to: string } | null {
@@ -60,21 +40,4 @@ function dottedDateToIso(value: string): string | null {
   if (!parsed.isValid()) return null;
 
   return parsed.format('YYYY-MM-DD');
-}
-
-export function findCasesMatchingDate(cases: ParsedPaserCase[], date: string): ParsedPaserCase[] {
-  const target = dayjs(date);
-  if (!target.isValid()) return [];
-
-  return cases.filter((item) => {
-    const from = dayjs(item.from);
-    const to = dayjs(item.to);
-    if (!from.isValid() || !to.isValid()) return false;
-
-    return !target.isBefore(from, 'day') && !target.isAfter(to, 'day');
-  });
-}
-
-export function isSupportedLeaveType(leaveType: LeaveType): boolean {
-  return leaveType === 'vacation' || leaveType === 'sickLeave';
 }
