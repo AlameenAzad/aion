@@ -39,6 +39,26 @@ import {
 } from '../../src/utils/browserCookies';
 import { spawn } from 'child_process';
 
+// CI runs on ubuntu-latest (linux); local dev is darwin — these tests must
+// exercise the real path for whichever platform they're actually running on
+// instead of skipping, or CI silently gets zero coverage of this file.
+type PlatformRel = { darwin: string; linux: string };
+function platformRel(map: PlatformRel): string {
+  return map[process.platform === 'darwin' ? 'darwin' : 'linux'];
+}
+const FIREFOX_REL: PlatformRel = {
+  darwin: 'Library/Application Support/Firefox',
+  linux: '.mozilla/firefox',
+};
+const ZEN_REL: PlatformRel = {
+  darwin: 'Library/Application Support/zen',
+  linux: '.zen',
+};
+const CHROME_COOKIES_REL: PlatformRel = {
+  darwin: 'Library/Application Support/Google/Chrome/Default/Cookies',
+  linux: '.config/google-chrome/Default/Cookies',
+};
+
 /** Builds a real Chrome-style encrypted cookie value (v10 + 32-byte header + PKCS7). */
 function encryptChromiumCookie(plaintext: string, key: Buffer): Buffer {
   const iv = Buffer.alloc(16, ' ');
@@ -109,11 +129,10 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   function firefoxAppDir(): string {
-    return path.join(fakeHome, 'Library/Application Support/Firefox');
+    return path.join(fakeHome, platformRel(FIREFOX_REL));
   }
 
   it('resolves the Install-Default profile and picks the last-accessed cookie across duplicates, fixing pipe-value truncation', async () => {
-    if (process.platform !== 'darwin') return; // path table only covers darwin/linux in this test
     const appDir = firefoxAppDir();
     const profileDir = path.join(appDir, 'xyz123.default-release');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -158,7 +177,6 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('falls back to any profile with a Path when nothing is marked Default', async () => {
-    if (process.platform !== 'darwin') return;
     const appDir = firefoxAppDir();
     const profileDir = path.join(appDir, 'onlyprofile');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -179,7 +197,6 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('degrades to null when the profile resolves but has no cookies.sqlite file', async () => {
-    if (process.platform !== 'darwin') return;
     const appDir = firefoxAppDir();
     const profileDir = path.join(appDir, 'empty-profile');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -193,7 +210,6 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('resolves an absolute (IsRelative=0) profile Path outside the app-support dir', async () => {
-    if (process.platform !== 'darwin') return;
     const appDir = firefoxAppDir();
     fs.mkdirSync(appDir, { recursive: true });
 
@@ -221,7 +237,6 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('picks up a -wal sidecar file sitting next to the main db without erroring', async () => {
-    if (process.platform !== 'darwin') return;
     const appDir = firefoxAppDir();
     const profileDir = path.join(appDir, 'default');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -248,7 +263,6 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('returns null (not throw) when the db copy fails for a reason other than access-denied', async () => {
-    if (process.platform !== 'darwin') return;
     const appDir = firefoxAppDir();
     const profileDir = path.join(appDir, 'default');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -275,7 +289,7 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('degrades to null when profiles.ini exists but has no usable profile', async () => {
-    const appDir = path.join(fakeHome, 'Library/Application Support/zen');
+    const appDir = path.join(fakeHome, platformRel(ZEN_REL));
     fs.mkdirSync(appDir, { recursive: true });
     fs.writeFileSync(path.join(appDir, 'profiles.ini'), '; empty\n');
     const cookie = await getSessionCookieForDomain('zen', 'co.example.com');
@@ -283,7 +297,6 @@ describe('Firefox/Zen cookie read (integration)', () => {
   });
 
   it('propagates CookieAccessDeniedError (does not swallow it into null) when the copy is denied', async () => {
-    if (process.platform !== 'darwin') return;
     const appDir = firefoxAppDir();
     const profileDir = path.join(appDir, 'default');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -321,9 +334,15 @@ describe('Chromium cookie read (integration)', () => {
   });
 
   it('decrypts real cookie rows via the (faked) Keychain password and picks the last-accessed duplicate', async () => {
-    if (process.platform !== 'darwin') return;
-    const key = crypto.pbkdf2Sync(FAKE_SAFE_STORAGE_PASSWORD, 'saltysalt', 1003, 16, 'sha1');
-    const dbPath = path.join(fakeHome, 'Library/Application Support/Google/Chrome/Default/Cookies');
+    // macOS derives the key from the (faked) Keychain password via 1003 pbkdf2
+    // iterations; Linux has no Secret Service keyring in CI, so it falls back
+    // to Chromium's well-known "peanuts" constant with a single iteration —
+    // see getChromiumSafeStorageKey.
+    const key =
+      process.platform === 'darwin'
+        ? crypto.pbkdf2Sync(FAKE_SAFE_STORAGE_PASSWORD, 'saltysalt', 1003, 16, 'sha1')
+        : crypto.pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1');
+    const dbPath = path.join(fakeHome, platformRel(CHROME_COOKIES_REL));
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     sqliteExec(
       dbPath,
@@ -373,8 +392,7 @@ describe('resolvePeopleForceCookie', () => {
   });
 
   it('reads a real cookie from the configured browser when no manual cookie is set', async () => {
-    if (process.platform !== 'darwin') return;
-    const appDir = path.join(fakeHome, 'Library/Application Support/Firefox');
+    const appDir = path.join(fakeHome, platformRel(FIREFOX_REL));
     const profileDir = path.join(appDir, 'default');
     fs.mkdirSync(profileDir, { recursive: true });
     fs.writeFileSync(
