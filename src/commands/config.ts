@@ -21,6 +21,8 @@ import { JiraClient } from '../api/jira';
 import { PaserClient } from '../api/paser';
 import { configureLeaveTypeMappings } from '../utils/leaveSetup';
 import { promptPeopleForceSetup } from '../utils/peopleforceSetup';
+import { describeBrowser } from '../utils/browserCookies';
+import { resolveDyceBrowser } from '../utils/dyceBrowser';
 import { configureDyceSilentReauth } from '../utils/dyceSilentReauthSetup';
 
 export function runConfigList(): void {
@@ -50,14 +52,14 @@ export function runConfigList(): void {
   console.log(
     `  Token           : ${config.dyce.token ? maskToken(config.dyce.token) : '(will refresh on next use)'}`
   );
-  const dyceSilentBrowser = config.dyce.browser ?? config.peopleforce?.browser;
+  const dyceSilent = resolveDyceBrowser(config);
   console.log(
     `  Auto re-auth    : ${
-      config.dyce.browser
-        ? `enabled — via ${config.dyce.browser}`
-        : dyceSilentBrowser
-          ? `enabled — via ${dyceSilentBrowser} (reusing PeopleForce's browser)`
-          : 'disabled'
+      !dyceSilent
+        ? 'disabled'
+        : config.dyce.browser
+          ? `enabled — via ${describeBrowser(dyceSilent.browser, dyceSilent.profile)}`
+          : `enabled — via ${describeBrowser(dyceSilent.browser, dyceSilent.profile)} (reusing PeopleForce's browser)`
     }`
   );
   console.log(chalk.dim('  Change with     : aion config re-auth-dyce'));
@@ -79,7 +81,7 @@ export function runConfigList(): void {
       `  Cookie mode     : ${
         config.peopleforce.manualCookie
           ? 'manual paste (configured)'
-          : `auto-detect, headless — from ${config.peopleforce.browser}`
+          : `auto-detect, headless — from ${config.peopleforce.browser ? describeBrowser(config.peopleforce.browser, config.peopleforce.browserProfile) : 'browser'}`
       }`
     );
     console.log(chalk.dim('  Switch mode     : aion config edit-peopleforce'));
@@ -556,8 +558,9 @@ export async function runConfigReAuthDyce(): Promise<void> {
 
   printStep(1, 1, 'Re-authenticate Dyce');
 
-  const silentBrowser = config.dyce.browser ?? config.peopleforce?.browser;
-  if (silentBrowser) {
+  const silent = resolveDyceBrowser(config);
+  if (silent) {
+    const silentBrowser = describeBrowser(silent.browser, silent.profile);
     const tryNow = await promptConfirm(
       `Silent re-auth is set up (via ${silentBrowser}). Try it now instead of re-pasting from DevTools?`,
       true
@@ -565,7 +568,12 @@ export async function runConfigReAuthDyce(): Promise<void> {
     if (tryNow) {
       try {
         const tokenData = await withSpinner(`Re-authenticating via ${silentBrowser}…`, () =>
-          silentlyReauthenticateDyce(config.dyce.clientId, config.dyce.scope, silentBrowser)
+          silentlyReauthenticateDyce(
+            config.dyce.clientId,
+            config.dyce.scope,
+            silent.browser,
+            silent.profile
+          )
         );
         if (tokenData) {
           saveConfig({

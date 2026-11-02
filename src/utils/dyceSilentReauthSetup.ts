@@ -3,7 +3,8 @@ import { showInfoBox } from '../ui/banner';
 import { withSpinner } from '../ui/spinner';
 import { loadConfig, saveConfig } from '../config/manager';
 import { silentlyReauthenticateDyce } from '../api/msauth';
-import { SupportedBrowser, BROWSER_CHOICES } from './browserCookies';
+import { SupportedBrowser, BROWSER_CHOICES, describeBrowser } from './browserCookies';
+import { promptBrowserProfile } from './browserProfilePrompt';
 
 /**
  * Dyce's refresh token dies after ~24h, so without this the hourly sync cron
@@ -50,11 +51,15 @@ export async function configureDyceSilentReauth(clientId: string, scope: string)
     'Which browser are you logged into Microsoft/Dyce with?',
     BROWSER_CHOICES
   );
+  const browserProfile = await promptBrowserProfile(
+    browser,
+    '(Pick the one holding your Microsoft work account.)'
+  );
 
   let verifiedTokens: { token?: string; refreshToken?: string } = {};
   try {
     const verified = await withSpinner('Verifying silent re-auth works…', () =>
-      silentlyReauthenticateDyce(clientId, scope, browser)
+      silentlyReauthenticateDyce(clientId, scope, browser, browserProfile)
     );
     if (verified) {
       printSuccess('Silent re-auth verified — it will kick in automatically when needed');
@@ -63,7 +68,7 @@ export async function configureDyceSilentReauth(clientId: string, scope: string)
       verifiedTokens = { token: verified.access_token, refreshToken: verified.refresh_token };
     } else {
       printWarning(
-        `Could not silently re-authenticate via ${browser} right now (no active SSO session found). ` +
+        `Could not silently re-authenticate via ${describeBrowser(browser, browserProfile)} right now (no active SSO session found). ` +
           "Saving the setting anyway — it'll be retried automatically the next time the refresh token expires."
       );
     }
@@ -76,7 +81,13 @@ export async function configureDyceSilentReauth(clientId: string, scope: string)
 
   saveConfig({
     ...config,
-    dyce: { ...config.dyce, ...verifiedTokens, browser, silentReauthDisabled: undefined },
+    dyce: {
+      ...config.dyce,
+      ...verifiedTokens,
+      browser,
+      browserProfile,
+      silentReauthDisabled: undefined,
+    },
   });
-  printSuccess(`Automatic re-auth enabled (${browser})`);
+  printSuccess(`Automatic re-auth enabled (${describeBrowser(browser, browserProfile)})`);
 }

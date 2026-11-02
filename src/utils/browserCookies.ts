@@ -6,7 +6,7 @@ import * as path from 'path';
 
 /** Single source of truth for supported browsers — schema.ts's zod enum and
  * every browser-choice prompt derive from this so adding one is a one-line change. */
-export const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'firefox', 'zen'] as const;
+export const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'helium', 'firefox', 'zen'] as const;
 
 export type SupportedBrowser = (typeof SUPPORTED_BROWSERS)[number];
 
@@ -14,6 +14,7 @@ export const BROWSER_CHOICES: { name: string; value: SupportedBrowser }[] = [
   { name: 'Chrome', value: 'chrome' },
   { name: 'Edge', value: 'edge' },
   { name: 'Brave', value: 'brave' },
+  { name: 'Helium', value: 'helium' },
   { name: 'Firefox', value: 'firefox' },
   { name: 'Zen', value: 'zen' },
 ];
@@ -44,24 +45,35 @@ const FIREFOX_FAMILY_APP_DIR: Record<
   },
 };
 
-const CHROMIUM_COOKIE_PATH: Record<
+/**
+ * Each Chromium browser's "User Data" dir. It holds one subdirectory per
+ * profile (`Default`, `Profile 1`, `Profile 2`, …), each with its own cookie
+ * DB — see getChromiumDbPaths.
+ */
+const CHROMIUM_USER_DATA_DIR: Record<
   ChromiumBrowser,
   { darwin: string; linux: string; win32: string }
 > = {
   chrome: {
-    darwin: 'Library/Application Support/Google/Chrome/Default/Cookies',
-    linux: '.config/google-chrome/Default/Cookies',
-    win32: 'AppData/Local/Google/Chrome/User Data/Default/Network/Cookies',
+    darwin: 'Library/Application Support/Google/Chrome',
+    linux: '.config/google-chrome',
+    win32: 'AppData/Local/Google/Chrome/User Data',
   },
   edge: {
-    darwin: 'Library/Application Support/Microsoft Edge/Default/Cookies',
-    linux: '.config/microsoft-edge/Default/Cookies',
-    win32: 'AppData/Local/Microsoft/Edge/User Data/Default/Network/Cookies',
+    darwin: 'Library/Application Support/Microsoft Edge',
+    linux: '.config/microsoft-edge',
+    win32: 'AppData/Local/Microsoft/Edge/User Data',
   },
   brave: {
-    darwin: 'Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies',
-    linux: '.config/BraveSoftware/Brave-Browser/Default/Cookies',
-    win32: 'AppData/Local/BraveSoftware/Brave-Browser/User Data/Default/Network/Cookies',
+    darwin: 'Library/Application Support/BraveSoftware/Brave-Browser',
+    linux: '.config/BraveSoftware/Brave-Browser',
+    win32: 'AppData/Local/BraveSoftware/Brave-Browser/User Data',
+  },
+  // macOS path + keychain entry verified live; Linux/Windows best-effort.
+  helium: {
+    darwin: 'Library/Application Support/net.imput.helium',
+    linux: '.config/net.imput.helium',
+    win32: 'AppData/Local/imput/Helium/User Data',
   },
 };
 
@@ -70,12 +82,15 @@ const CHROMIUM_LOCAL_STATE_PATH: Record<ChromiumBrowser, string> = {
   chrome: 'AppData/Local/Google/Chrome/User Data/Local State',
   edge: 'AppData/Local/Microsoft/Edge/User Data/Local State',
   brave: 'AppData/Local/BraveSoftware/Brave-Browser/User Data/Local State',
+  helium: 'AppData/Local/imput/Helium/User Data/Local State',
 };
 
 const CHROMIUM_SAFE_STORAGE: Record<ChromiumBrowser, { service: string; account: string }> = {
   chrome: { service: 'Chrome Safe Storage', account: 'Chrome' },
   edge: { service: 'Microsoft Edge Safe Storage', account: 'Microsoft Edge' },
   brave: { service: 'Brave Safe Storage', account: 'Brave' },
+  // Helium names its keychain entry "Storage Key", not "Safe Storage".
+  helium: { service: 'Helium Storage Key', account: 'Helium' },
 };
 
 /** Linux only: libsecret item Chromium stores its AES-key password under. */
@@ -83,6 +98,7 @@ const LINUX_SAFE_STORAGE_APPLICATION: Record<ChromiumBrowser, string> = {
   chrome: 'chrome',
   edge: 'microsoft-edge',
   brave: 'brave',
+  helium: 'helium',
 };
 
 /**
@@ -133,6 +149,7 @@ export class CookieAccessDeniedError extends Error {}
 export async function resolvePeopleForceCookie(config: {
   baseUrl: string;
   browser?: SupportedBrowser;
+  browserProfile?: string;
   manualCookie?: string;
 }): Promise<string> {
   if (config.manualCookie) return config.manualCookie;
@@ -143,10 +160,14 @@ export async function resolvePeopleForceCookie(config: {
     );
   }
 
-  const cookie = await getPeopleForceSessionCookie(config.browser, config.baseUrl);
+  const cookie = await getPeopleForceSessionCookie(
+    config.browser,
+    config.baseUrl,
+    config.browserProfile
+  );
   if (!cookie) {
     throw new Error(
-      `Could not read a PeopleForce session cookie from ${config.browser} — log in again in your browser, or run \`aion config edit-peopleforce\` to switch to manual paste.`
+      `Could not read a PeopleForce session cookie from ${describeBrowser(config.browser, config.browserProfile)} — log in again in your browser, or run \`aion config edit-peopleforce\` to switch to manual paste.`
     );
   }
   return cookie;
@@ -154,9 +175,10 @@ export async function resolvePeopleForceCookie(config: {
 
 export async function getPeopleForceSessionCookie(
   browser: SupportedBrowser,
-  baseUrl: string
+  baseUrl: string,
+  profile?: string
 ): Promise<string | null> {
-  return getSessionCookieForDomain(browser, new URL(baseUrl).hostname);
+  return getSessionCookieForDomain(browser, new URL(baseUrl).hostname, profile);
 }
 
 /**
@@ -166,45 +188,124 @@ export async function getPeopleForceSessionCookie(
  */
 export async function getSessionCookieForDomain(
   browser: SupportedBrowser,
-  domain: string
+  domain: string,
+  profile?: string
 ): Promise<string | null> {
   try {
     if (browser === 'firefox' || browser === 'zen') {
       return getFirefoxCookie(browser, domain);
     }
-    return getChromiumCookie(browser, domain);
+    return getChromiumCookie(browser, domain, profile);
   } catch (err) {
     if (err instanceof CookieAccessDeniedError) throw err;
     return null;
   }
 }
 
-// ── Chromium family (Chrome / Edge / Brave) ────────────────────────────────
+// ── Chromium family (Chrome / Edge / Brave / Helium) ────────────────────────────────
 // Cookie values are AES-128-CBC encrypted with a key derived (PBKDF2) from a
 // password stored in the OS keychain under a browser-specific service name.
 // This is the same scheme tools like yt-dlp's --cookies-from-browser use.
 
-function getChromiumDbPath(browser: ChromiumBrowser): string | null {
-  const home = os.homedir();
+/** Matches the profile directories Chromium creates inside its User Data dir. */
+const CHROMIUM_PROFILE_DIR = /^(Default|Profile \d+)$/;
+
+function getChromiumUserDataDir(browser: ChromiumBrowser): string | null {
   const rel =
     process.platform === 'darwin'
-      ? CHROMIUM_COOKIE_PATH[browser].darwin
+      ? CHROMIUM_USER_DATA_DIR[browser].darwin
       : process.platform === 'linux'
-        ? CHROMIUM_COOKIE_PATH[browser].linux
+        ? CHROMIUM_USER_DATA_DIR[browser].linux
         : /* istanbul ignore next */ process.platform === 'win32'
-          ? /* istanbul ignore next */ CHROMIUM_COOKIE_PATH[browser].win32
+          ? /* istanbul ignore next */ CHROMIUM_USER_DATA_DIR[browser].win32
           : /* istanbul ignore next */ null;
-  if (!rel) return null;
+  return rel ? path.join(os.homedir(), rel) : null;
+}
 
-  const full = path.join(home, rel);
-  if (fs.existsSync(full)) return full;
-
-  /* istanbul ignore next - fallback for pre-"Network/" Chrome profile layout on Windows */
-  if (process.platform === 'win32') {
-    const legacy = path.join(home, rel.replace('/Network/Cookies', '/Cookies'));
-    return fs.existsSync(legacy) ? legacy : null;
+/** Profile directory names (`Default`, `Profile 1`, …) in a browser's User Data dir, Default first. */
+function listChromiumProfileDirs(userDataDir: string): string[] {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(userDataDir);
+  } catch {
+    return [];
   }
-  return null;
+  const profileNumber = (name: string): number =>
+    name === 'Default' ? -1 : Number(name.slice('Profile '.length));
+  return entries
+    .filter((name) => CHROMIUM_PROFILE_DIR.test(name))
+    .sort((a, b) => profileNumber(a) - profileNumber(b));
+}
+
+/**
+ * Cookie DB paths for the browser, `Default` first then `Profile N` in numeric
+ * order — or just the one profile when `profile` is given. Browsers with
+ * multiple profiles (work/personal, or one per account) keep each login's
+ * cookies in its own DB, so reading only `Default` misses sessions that live
+ * in any other profile.
+ */
+function getChromiumDbPaths(browser: ChromiumBrowser, profile?: string): string[] {
+  const userDataDir = getChromiumUserDataDir(browser);
+  if (!userDataDir) return [];
+
+  const profiles = listChromiumProfileDirs(userDataDir).filter((p) => !profile || p === profile);
+
+  const paths: string[] = [];
+  for (const profileName of profiles) {
+    const profileDir = path.join(userDataDir, profileName);
+    // Chromium moved the DB into Network/ in v96; older Windows installs have it at the root.
+    for (const candidate of [
+      path.join(profileDir, 'Network', 'Cookies'),
+      path.join(profileDir, 'Cookies'),
+    ]) {
+      if (fs.existsSync(candidate)) {
+        paths.push(candidate);
+        break;
+      }
+    }
+  }
+  return paths;
+}
+
+export interface BrowserProfile {
+  /** Directory name inside the browser's User Data dir, e.g. "Profile 3" — what gets stored in config. */
+  dir: string;
+  /** Human-readable name the user gave the profile in the browser, e.g. "Informa". */
+  name: string;
+}
+
+/**
+ * Profiles of a Chromium browser with their user-visible names (from the
+ * `profile.info_cache` map in the browser's `Local State` JSON). Returns []
+ * for Firefox-family browsers, which aren't profile-selectable here.
+ */
+export function listBrowserProfiles(browser: SupportedBrowser): BrowserProfile[] {
+  if (browser === 'firefox' || browser === 'zen') return [];
+
+  const userDataDir = getChromiumUserDataDir(browser);
+  if (!userDataDir) return [];
+
+  let names: Record<string, { name?: string }> = {};
+  try {
+    const localState = JSON.parse(
+      fs.readFileSync(path.join(userDataDir, 'Local State'), 'utf-8')
+    ) as { profile?: { info_cache?: Record<string, { name?: string }> } };
+    names = localState.profile?.info_cache ?? {};
+  } catch {
+    // No/corrupt Local State — fall back to directory names below.
+  }
+
+  return listChromiumProfileDirs(userDataDir).map((dir) => ({
+    dir,
+    name: names[dir]?.name || dir,
+  }));
+}
+
+/** "helium" or, with a profile, "helium (Informa)" — for user-facing messages. */
+export function describeBrowser(browser: SupportedBrowser, profile?: string): string {
+  if (!profile) return browser;
+  const name = listBrowserProfiles(browser).find((p) => p.dir === profile)?.name ?? profile;
+  return `${browser} (${name})`;
 }
 
 /**
@@ -411,9 +512,13 @@ function runSqlite(dbPath: string, query: string): string[] {
   }
 }
 
-function getChromiumCookie(browser: ChromiumBrowser, domain: string): string | null {
-  const dbPath = getChromiumDbPath(browser);
-  if (!dbPath) return null;
+function getChromiumCookie(
+  browser: ChromiumBrowser,
+  domain: string,
+  profile?: string
+): string | null {
+  const dbPaths = getChromiumDbPaths(browser, profile);
+  if (dbPaths.length === 0) return null;
 
   // Windows uses a different key source (DPAPI-wrapped, from Local State)
   // and cipher (AES-256-GCM) than mac/linux (Keychain/libsecret password,
@@ -436,7 +541,19 @@ function getChromiumCookie(browser: ChromiumBrowser, domain: string): string | n
   const query =
     `SELECT name, hex(encrypted_value), last_access_utc FROM cookies ` +
     `WHERE host_key = '${escaped}' OR host_key = '.${escaped}' ORDER BY last_access_utc ASC;`;
-  const lines = runSqlite(dbPath, query);
+
+  // The same domain can have cookies in several profiles (different accounts,
+  // or a stale logout in one). Never merge across profiles — that would mix
+  // sessions. Pick the single profile whose matching cookies were used most
+  // recently; ties go to the earlier profile (Default first).
+  let best: { lines: string[]; lastAccess: number } | null = null;
+  for (const dbPath of dbPaths) {
+    const lines = runSqlite(dbPath, query);
+    if (lines.length === 0) continue;
+    const lastAccess = Math.max(...lines.map((line) => Number(line.split('|')[2]) || 0));
+    if (!best || lastAccess > best.lastAccess) best = { lines, lastAccess };
+  }
+  if (!best) return null;
 
   // A Map keeps only one value per cookie name if a name exists under both
   // the exact host and the leading-dot domain. Order by last-accessed (not
@@ -444,7 +561,7 @@ function getChromiumCookie(browser: ChromiumBrowser, domain: string): string | n
   // different contexts (see the Firefox/Zen container comment below) where
   // the most-recently-created row isn't necessarily the one actually in use.
   const cookies = new Map<string, string>();
-  for (const line of lines) {
+  for (const line of best.lines) {
     // Three pipe-delimited columns (name|hex(encrypted_value)|last_access_utc).
     // A cookie name is an HTTP token and hex() output is only [0-9a-f], so
     // neither of the first two fields can itself contain '|' — splitting and

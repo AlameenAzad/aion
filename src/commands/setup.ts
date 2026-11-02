@@ -366,6 +366,7 @@ export async function runSetup(): Promise<void> {
   let paserAccountId: number | undefined;
   let peopleforceBaseUrl: string | undefined;
   let peopleforceBrowser: SupportedBrowser | undefined;
+  let peopleforceBrowserProfile: string | undefined;
   let peopleforceManualCookie: string | undefined;
 
   if (resuming && draft.step >= 4 && (draft.paser || draft.peopleforce || draft.leaveProvider)) {
@@ -382,6 +383,7 @@ export async function runSetup(): Promise<void> {
       ({
         baseUrl: peopleforceBaseUrl,
         browser: peopleforceBrowser,
+        browserProfile: peopleforceBrowserProfile,
         manualCookie: peopleforceManualCookie,
       } = draft.peopleforce);
     }
@@ -464,6 +466,7 @@ export async function runSetup(): Promise<void> {
         leaveProvider = 'peopleforce';
         peopleforceBaseUrl = result.baseUrl;
         peopleforceBrowser = result.browser;
+        peopleforceBrowserProfile = result.browserProfile;
         peopleforceManualCookie = result.manualCookie;
       } else {
         printWarning(
@@ -493,6 +496,7 @@ export async function runSetup(): Promise<void> {
           ? {
               baseUrl: peopleforceBaseUrl,
               browser: peopleforceBrowser,
+              browserProfile: peopleforceBrowserProfile,
               manualCookie: peopleforceManualCookie,
             }
           : undefined,
@@ -743,6 +747,7 @@ export async function runSetup(): Promise<void> {
         ? {
             baseUrl: peopleforceBaseUrl,
             browser: peopleforceBrowser,
+            browserProfile: peopleforceBrowserProfile,
             manualCookie: peopleforceManualCookie,
           }
         : undefined,

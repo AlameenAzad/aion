@@ -16,6 +16,8 @@ jest.mock('../../src/config/manager', () => ({
 }));
 jest.mock('../../src/utils/browserCookies', () => ({
   getSessionCookieForDomain: jest.fn(),
+  describeBrowser: (browser: string, profile?: string) =>
+    profile ? `${browser} (${profile})` : browser,
 }));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -404,7 +406,11 @@ describe('resolveDyceToken', () => {
     const result = await resolveDyceToken(config);
 
     expect(result).toBe(newToken);
-    expect(mockedGetSessionCookie).toHaveBeenCalledWith('chrome', 'login.microsoftonline.com');
+    expect(mockedGetSessionCookie).toHaveBeenCalledWith(
+      'chrome',
+      'login.microsoftonline.com',
+      undefined
+    );
     expect(mockedUpdateConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         dyce: expect.objectContaining({ token: newToken, refreshToken: 'silent-refresh' }),
@@ -439,7 +445,57 @@ describe('resolveDyceToken', () => {
     const result = await resolveDyceToken(config);
 
     expect(result).toBe(newToken);
-    expect(mockedGetSessionCookie).toHaveBeenCalledWith('edge', 'login.microsoftonline.com');
+    expect(mockedGetSessionCookie).toHaveBeenCalledWith(
+      'edge',
+      'login.microsoftonline.com',
+      undefined
+    );
+  });
+
+  it("passes dyce.browserProfile to the cookie read, and never borrows peopleforce's profile for a different browser", async () => {
+    const expiredToken = makeJwt(Math.floor(Date.now() / 1000) - 60);
+    const newToken = makeJwt(Math.floor(Date.now() / 1000) + 3600);
+    const config = {
+      ...validConfig,
+      dyce: { ...validConfig.dyce, token: expiredToken, browser: 'helium' as const },
+      peopleforce: {
+        baseUrl: 'https://co.peopleforce.io',
+        browser: 'chrome' as const,
+        browserProfile: 'Profile 9',
+      },
+    };
+    const silentOk = () => {
+      mockedAxios.post.mockRejectedValueOnce(new Error('invalid_grant'));
+      mockedGetSessionCookie.mockResolvedValueOnce('ESTSAUTH=abc');
+      mockedAxios.get.mockResolvedValueOnce({
+        status: 302,
+        headers: { location: 'https://app.dyce.cloud/?code=silent-code' },
+      });
+      mockedAxios.post.mockResolvedValueOnce({
+        data: {
+          access_token: newToken,
+          refresh_token: 'silent-refresh',
+          expires_in: 3600,
+          token_type: 'Bearer',
+        },
+      });
+    };
+
+    silentOk();
+    await resolveDyceToken(config); // dyce.browser set, no dyce profile -> auto
+    expect(mockedGetSessionCookie).toHaveBeenLastCalledWith(
+      'helium',
+      'login.microsoftonline.com',
+      undefined
+    );
+
+    silentOk();
+    await resolveDyceToken({ ...config, dyce: { ...config.dyce, browserProfile: 'Profile 3' } });
+    expect(mockedGetSessionCookie).toHaveBeenLastCalledWith(
+      'helium',
+      'login.microsoftonline.com',
+      'Profile 3'
+    );
   });
 
   it('throws when the browser cookie is missing (no fallback possible)', async () => {

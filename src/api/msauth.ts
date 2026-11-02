@@ -3,7 +3,12 @@ import * as crypto from 'crypto';
 import { Config } from '../config/schema';
 import { updateConfig } from '../config/manager';
 import { keychainAvailable, setSecret, SECRET_ACCOUNTS } from '../config/keychain';
-import { getSessionCookieForDomain, SupportedBrowser } from '../utils/browserCookies';
+import {
+  getSessionCookieForDomain,
+  describeBrowser,
+  SupportedBrowser,
+} from '../utils/browserCookies';
+import { resolveDyceBrowser } from '../utils/dyceBrowser';
 
 const AUTHORITY = 'https://login.microsoftonline.com/organizations/oauth2/v2.0';
 
@@ -144,9 +149,10 @@ function base64url(buf: Buffer): string {
 export async function silentlyReauthenticateDyce(
   clientId: string,
   scope: string,
-  browser: SupportedBrowser
+  browser: SupportedBrowser,
+  profile?: string
 ): Promise<MsTokenResponse | null> {
-  const cookie = await getSessionCookieForDomain(browser, 'login.microsoftonline.com');
+  const cookie = await getSessionCookieForDomain(browser, 'login.microsoftonline.com', profile);
   if (!cookie) return null;
 
   const codeVerifier = base64url(crypto.randomBytes(32));
@@ -241,14 +247,16 @@ export async function resolveDyceToken(config: Config): Promise<string> {
   // The refresh token itself has a 24h absolute lifetime on Dyce's SPA app
   // registration — once it's dead, fall back to silently re-authenticating
   // off the browser's still-alive AAD SSO session, same as the browser does.
-  const browser = config.dyce.browser ?? config.peopleforce?.browser;
+  const silent = resolveDyceBrowser(config);
+  const browser = silent?.browser;
   let silentErr: unknown;
   if (!tokenData && browser && !config.dyce.silentReauthDisabled) {
     try {
       tokenData = await silentlyReauthenticateDyce(
         config.dyce.clientId,
         config.dyce.scope,
-        browser
+        browser,
+        silent?.profile
       );
     } catch (err) {
       // Never let this escape raw — this runs unattended in the hourly cron,
@@ -263,7 +271,7 @@ export async function resolveDyceToken(config: Config): Promise<string> {
   if (!tokenData) {
     const silentErrMsg = silentErr instanceof Error ? silentErr.message : String(silentErr);
     const hint = browser
-      ? `Silent re-auth via ${browser} also failed${silentErr ? ` (${silentErrMsg})` : ' (your Microsoft SSO session may have expired too)'}. ` +
+      ? `Silent re-auth via ${describeBrowser(browser, silent?.profile)} also failed${silentErr ? ` (${silentErrMsg})` : ' (your Microsoft SSO session may have expired too)'}. ` +
         'Run `aion config re-auth-dyce` to re-authenticate manually.'
       : 'Run `aion config re-auth-dyce` to re-authenticate — it can now also set up automatic ' +
         'silent re-auth via your browser so this stops happening.';

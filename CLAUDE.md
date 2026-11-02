@@ -48,6 +48,8 @@ The config lives at `~/.aion/config.json` (mode 0600) and is validated with Zod.
 
 **Leave provider** (`config.leaveProvider: 'paser' | 'peopleforce'`) picks which of `config.paser` / `config.peopleforce` is active; only one is normally populated. Undefined `leaveProvider` with `config.paser` set falls back to Paser (pre-migration default). `ensureLeaveProviderNotice` (`src/utils/leaveProviderNotice.ts`) shows a one-time prompt (`peopleforceNoticeShown`) nudging existing Paser users toward PeopleForce.
 
+**Browser profiles** (Chromium family only): `config.{dyce,peopleforce}.browserProfile` is a profile dir name (`Default`, `Profile 3`); unset = auto-pick the profile whose matching cookies were most recently used. Display names come from `Local State` (`listBrowserProfiles` / `describeBrowser` in `browserCookies.ts`); `promptBrowserProfile` is the shared prompt. Dyce's profile only falls back to PeopleForce's together with its browser (`resolveDyceBrowser`).
+
 **Dyce silent re-auth** (`config.dyce.browser`, falls back to `config.peopleforce?.browser`; `config.dyce.silentReauthDisabled` is an explicit opt-out): Dyce's SPA refresh token has a hard 24h *absolute* lifetime — refreshing does not reset it. `silentlyReauthenticateDyce()` (`src/api/msauth.ts`) works around this by reusing the browser's live Microsoft/AAD SSO session cookie (read via `getSessionCookieForDomain` in `src/utils/browserCookies.ts`) to redo a PKCE `prompt=none` authorize/token exchange with no user interaction, exactly mirroring what Dyce's own web app does silently. `ensureDyceAutoReauthNotice` (`src/utils/dyceAutoReauthNotice.ts`) is the equivalent one-time notice for this (`dyceAutoReauthNoticeShown`), and `configureDyceSilentReauth` (`src/utils/dyceSilentReauthSetup.ts`) is the shared prompt/verify/save flow used by both that notice and `aion config re-auth-dyce`.
 
 ### Sync / Preview flow
@@ -77,7 +79,7 @@ All clients use Axios with `applyRetryInterceptor()` attached — 3 attempts, ex
 - **`JiraClient`** — resolves issue keys and summaries via JQL batch queries (`getIssuesBatch`, `getIssuesByIdBatch`).
 - **`DyceClient`** — creates time recordings. Requires `x-instance` and `x-company` headers. Uses OData pagination for listing.
 - **`PaserClient`** — authenticates (cookie-based), fetches leave cases for date matching.
-- **`PeopleForceClient`** (`src/api/peopleforce.ts`) — session-cookie authenticated (no login flow of its own); scrapes leave requests from server-rendered HTML via `cheerio` (`parseLeaveRequestRows`). The cookie comes from `resolvePeopleForceCookie` (`src/utils/browserCookies.ts`): a manually pasted cookie, or auto-read from the browser's cookie store (Chrome/Edge/Brave/Firefox/Zen).
+- **`PeopleForceClient`** (`src/api/peopleforce.ts`) — session-cookie authenticated (no login flow of its own); scrapes leave requests from server-rendered HTML via `cheerio` (`parseLeaveRequestRows`). The cookie comes from `resolvePeopleForceCookie` (`src/utils/browserCookies.ts`): a manually pasted cookie, or auto-read from the browser's cookie store (Chrome/Edge/Brave/Helium/Firefox/Zen).
 - **`msauth.ts`** — handles Dyce OAuth2 via Microsoft device code flow (`getDeviceCode` / `pollForToken`). `resolveDyceToken(config)` auto-refreshes using the stored refresh token, falling back to `silentlyReauthenticateDyce()` (browser-SSO-based) when the refresh token itself has expired, and writes the new token back via `updateConfig()`.
 
 ### Build
