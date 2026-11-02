@@ -436,6 +436,7 @@ aion config re-auth-dyce
 
 Caveats:
 - Needs a live Microsoft SSO session in that browser (i.e. you're actually logged into Dyce/Microsoft somewhere).
+- Chrome/Edge/Brave/Helium: every profile is searched. With several profiles, setup asks which one to use (shown by the name you gave it in the browser, e.g. "Informa") or lets aion auto-pick the most recently used one. Firefox/Zen use their default profile.
 - On macOS, reading Chrome/Edge/Brave/Helium's cookie store needs "Full Disk Access" granted to the terminal app running aion (System Settings → Privacy & Security). Firefox/Zen don't need this.
 - If the *background cron job* hits an expired token and can't silently re-auth (e.g. it lacks the same OS permissions your interactive terminal has), it fails safely and logs the error — run `aion config re-auth-dyce` once yourself to recover.
 

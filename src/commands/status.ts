@@ -5,7 +5,7 @@ import { JiraClient } from '../api/jira';
 import { DyceClient } from '../api/dyce';
 import { PaserClient } from '../api/paser';
 import { PeopleForceClient } from '../api/peopleforce';
-import { resolvePeopleForceCookie } from '../utils/browserCookies';
+import { resolvePeopleForceCookie, describeBrowser } from '../utils/browserCookies';
 import { resolveDyceToken, isTokenExpired } from '../api/msauth';
 import { ensureLeaveProviderNotice } from '../utils/leaveProviderNotice';
 import { ensureDyceAutoReauthNotice } from '../utils/dyceAutoReauthNotice';
@@ -159,7 +159,7 @@ export async function runStatus(): Promise<void> {
         ok: true,
         detail: config.peopleforce.manualCookie
           ? 'session cookie (manually pasted)'
-          : `session cookie from ${config.peopleforce.browser}`,
+          : `session cookie from ${config.peopleforce.browser ? describeBrowser(config.peopleforce.browser, config.peopleforce.browserProfile) : 'browser'}`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -2,6 +2,7 @@ import { configureDyceSilentReauth } from '../../src/utils/dyceSilentReauthSetup
 import { promptList, promptConfirm } from '../../src/ui/prompts';
 import { loadConfig, saveConfig } from '../../src/config/manager';
 import { silentlyReauthenticateDyce } from '../../src/api/msauth';
+import { promptBrowserProfile } from '../../src/utils/browserProfilePrompt';
 import { Config } from '../../src/config/schema';
 
 jest.mock('../../src/ui/prompts', () => ({
@@ -18,6 +19,9 @@ jest.mock('../../src/config/manager', () => ({
   loadConfig: jest.fn(),
   saveConfig: jest.fn(),
 }));
+jest.mock('../../src/utils/browserProfilePrompt', () => ({
+  promptBrowserProfile: jest.fn(),
+}));
 jest.mock('../../src/api/msauth', () => ({
   silentlyReauthenticateDyce: jest.fn(),
 }));
@@ -26,6 +30,7 @@ const mockedPromptList = promptList as jest.Mock;
 const mockedPromptConfirm = promptConfirm as jest.Mock;
 const mockedLoadConfig = loadConfig as jest.Mock;
 const mockedSaveConfig = saveConfig as jest.Mock;
+const mockedPromptBrowserProfile = promptBrowserProfile as jest.Mock;
 const mockedSilentlyReauthenticateDyce = silentlyReauthenticateDyce as jest.Mock;
 
 function baseConfig(overrides: Partial<Config> = {}): Config {
@@ -125,6 +130,28 @@ describe('configureDyceSilentReauth', () => {
           refreshToken: 'new-refresh',
           silentReauthDisabled: undefined,
         }),
+      })
+    );
+  });
+
+  it('verifies with and persists the chosen browser profile', async () => {
+    mockedLoadConfig.mockReturnValue(baseConfig());
+    mockedPromptConfirm.mockResolvedValue(true);
+    mockedPromptList.mockResolvedValue('helium');
+    mockedPromptBrowserProfile.mockResolvedValue('Profile 3');
+    mockedSilentlyReauthenticateDyce.mockResolvedValue(null);
+
+    await configureDyceSilentReauth('client-id', 'scope');
+
+    expect(mockedSilentlyReauthenticateDyce).toHaveBeenCalledWith(
+      'client-id',
+      'scope',
+      'helium',
+      'Profile 3'
+    );
+    expect(mockedSaveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dyce: expect.objectContaining({ browser: 'helium', browserProfile: 'Profile 3' }),
       })
     );
   });

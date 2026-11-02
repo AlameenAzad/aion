@@ -17,11 +17,14 @@ import {
   CookieAccessDeniedError,
   SupportedBrowser,
   BROWSER_CHOICES,
+  describeBrowser,
 } from './browserCookies';
+import { promptBrowserProfile } from './browserProfilePrompt';
 
 export interface PeopleForceSetupResult {
   baseUrl: string;
   browser?: SupportedBrowser;
+  browserProfile?: string;
   manualCookie?: string;
 }
 
@@ -141,11 +144,12 @@ export async function promptPeopleForceSetup(
   }
 
   const browser = await promptList<SupportedBrowser>('Which browser is it in?', BROWSER_CHOICES);
+  const browserProfile = await promptBrowserProfile(browser);
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     let cookie: string | null;
     try {
-      cookie = await getPeopleForceSessionCookie(browser, baseUrl);
+      cookie = await getPeopleForceSessionCookie(browser, baseUrl, browserProfile);
     } catch (err) {
       if (err instanceof CookieAccessDeniedError) {
         printError(err.message);
@@ -158,7 +162,7 @@ export async function promptPeopleForceSetup(
 
     if (!cookie) {
       printError(
-        `Could not read a PeopleForce session cookie from ${browser}. Make sure you're logged in there.`
+        `Could not read a PeopleForce session cookie from ${describeBrowser(browser, browserProfile)}. Make sure you're logged in there.`
       );
       const retry = await promptConfirm('Try again?', true);
       if (!retry) return null;
@@ -166,7 +170,7 @@ export async function promptPeopleForceSetup(
     }
 
     if (await verifyCookie(baseUrl, cookie)) {
-      return { baseUrl, browser };
+      return { baseUrl, browser, browserProfile };
     }
     const retry = await promptConfirm('Try again?', true);
     if (!retry) return null;

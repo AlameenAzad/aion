@@ -258,6 +258,7 @@ export interface SetupDraft {
   peopleforce?: {
     baseUrl: string;
     browser?: SupportedBrowser;
+    browserProfile?: string;
     manualCookie?: string;
   };
   leaveProvider?: 'paser' | 'peopleforce';

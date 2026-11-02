@@ -1,6 +1,7 @@
 import { promptPeopleForceSetup } from '../../src/utils/peopleforceSetup';
 import { promptText, promptList, promptConfirm, promptPassword } from '../../src/ui/prompts';
 import { PeopleForceClient } from '../../src/api/peopleforce';
+import { promptBrowserProfile } from '../../src/utils/browserProfilePrompt';
 import {
   openPeopleForceLogin,
   getPeopleForceSessionCookie,
@@ -20,6 +21,9 @@ jest.mock('../../src/ui/banner', () => ({ showInfoBox: jest.fn() }));
 jest.mock('../../src/ui/spinner', () => ({
   withSpinner: jest.fn((_text: string, fn: () => unknown) => fn()),
 }));
+jest.mock('../../src/utils/browserProfilePrompt', () => ({
+  promptBrowserProfile: jest.fn(),
+}));
 jest.mock('../../src/api/peopleforce', () => ({
   PeopleForceClient: jest.fn(),
 }));
@@ -36,6 +40,7 @@ const mockedPromptPassword = promptPassword as jest.Mock;
 const mockedOpenLogin = openPeopleForceLogin as jest.Mock;
 const mockedGetCookie = getPeopleForceSessionCookie as jest.Mock;
 const MockedPeopleForceClient = PeopleForceClient as jest.Mock;
+const mockedPromptBrowserProfile = promptBrowserProfile as jest.Mock;
 
 const BASE_URL = 'https://co.peopleforce.io';
 
@@ -110,8 +115,19 @@ describe('promptPeopleForceSetup', () => {
 
     const result = await promptPeopleForceSetup();
 
-    expect(result).toEqual({ baseUrl: BASE_URL, browser: 'chrome' });
-    expect(mockedGetCookie).toHaveBeenCalledWith('chrome', BASE_URL);
+    expect(result).toEqual({ baseUrl: BASE_URL, browser: 'chrome', browserProfile: undefined });
+    expect(mockedGetCookie).toHaveBeenCalledWith('chrome', BASE_URL, undefined);
+  });
+
+  it('reads from and returns the chosen browser profile', async () => {
+    mockedPromptList.mockResolvedValueOnce('auto').mockResolvedValueOnce('helium');
+    mockedPromptBrowserProfile.mockResolvedValueOnce('Profile 3');
+    mockedGetCookie.mockResolvedValue('session=abc123');
+
+    const result = await promptPeopleForceSetup();
+
+    expect(result).toEqual({ baseUrl: BASE_URL, browser: 'helium', browserProfile: 'Profile 3' });
+    expect(mockedGetCookie).toHaveBeenCalledWith('helium', BASE_URL, 'Profile 3');
   });
 
   it('falls back to manual paste when the OS denies cookie access', async () => {

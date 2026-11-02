@@ -77,6 +77,12 @@ export const ConfigSchema = z.object({
      */
     browser: z.enum(SUPPORTED_BROWSERS).optional(),
     /**
+     * Chromium profile directory (e.g. "Profile 3") to read the SSO cookie
+     * from. Unset = auto-pick the most recently used profile that has one.
+     * Only meaningful together with `browser` — see resolveDyceBrowser.
+     */
+    browserProfile: z.string().min(1).optional(),
+    /**
      * Explicit opt-out of silent re-auth, separate from `browser` being unset.
      * Needed because `browser` here can be undefined while silent re-auth is
      * still effectively enabled via the `peopleforce.browser` fallback in
@@ -107,6 +113,8 @@ export const ConfigSchema = z.object({
        * manualCookie is the permission-free fallback.
        */
       browser: z.enum(SUPPORTED_BROWSERS).optional(),
+      /** Chromium profile directory (e.g. "Profile 3") to read from. Unset = auto-pick. */
+      browserProfile: z.string().min(1).optional(),
       /**
        * Session cookie pasted by the user from DevTools (Network tab → any
        * request to the domain → Request Headers → Cookie), used verbatim as

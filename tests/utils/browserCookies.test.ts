@@ -36,6 +36,8 @@ import {
   getSessionCookieForDomain,
   openPeopleForceLogin,
   CookieAccessDeniedError,
+  listBrowserProfiles,
+  describeBrowser,
 } from '../../src/utils/browserCookies';
 import { spawn } from 'child_process';
 
@@ -54,9 +56,9 @@ const ZEN_REL: PlatformRel = {
   darwin: 'Library/Application Support/zen',
   linux: '.zen',
 };
-const CHROME_COOKIES_REL: PlatformRel = {
-  darwin: 'Library/Application Support/Google/Chrome/Default/Cookies',
-  linux: '.config/google-chrome/Default/Cookies',
+const CHROME_USER_DATA_REL: PlatformRel = {
+  darwin: 'Library/Application Support/Google/Chrome',
+  linux: '.config/google-chrome',
 };
 
 /** Builds a real Chrome-style encrypted cookie value (v10 + 32-byte header + PKCS7). */
@@ -342,7 +344,7 @@ describe('Chromium cookie read (integration)', () => {
       process.platform === 'darwin'
         ? crypto.pbkdf2Sync(FAKE_SAFE_STORAGE_PASSWORD, 'saltysalt', 1003, 16, 'sha1')
         : crypto.pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1');
-    const dbPath = path.join(fakeHome, platformRel(CHROME_COOKIES_REL));
+    const dbPath = path.join(fakeHome, platformRel(CHROME_USER_DATA_REL), 'Default', 'Cookies');
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     sqliteExec(
       dbPath,
@@ -360,6 +362,118 @@ describe('Chromium cookie read (integration)', () => {
 
     const cookie = await getSessionCookieForDomain('chrome', 'co.example.com');
     expect(cookie).toBe('sid=fresh-session');
+  });
+
+  describe('multiple profiles', () => {
+    const chromiumKey = () =>
+      process.platform === 'darwin'
+        ? crypto.pbkdf2Sync(FAKE_SAFE_STORAGE_PASSWORD, 'saltysalt', 1003, 16, 'sha1')
+        : crypto.pbkdf2Sync('peanuts', 'saltysalt', 1, 16, 'sha1');
+
+    function writeProfile(
+      profile: string,
+      rows: { name: string; value: string; lastAccess: number }[]
+    ): void {
+      const dbPath = path.join(fakeHome, platformRel(CHROME_USER_DATA_REL), profile, 'Cookies');
+      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+      sqliteExec(
+        dbPath,
+        'CREATE TABLE cookies (name TEXT, host_key TEXT, encrypted_value BLOB, last_access_utc INTEGER);'
+      );
+      for (const r of rows) {
+        const hex = encryptChromiumCookie(r.value, chromiumKey()).toString('hex');
+        sqliteExec(
+          dbPath,
+          `INSERT INTO cookies VALUES ('${r.name}', '.co.example.com', X'${hex}', ${r.lastAccess});`
+        );
+      }
+    }
+
+    it('finds the cookie when it only exists in a non-Default profile', async () => {
+      writeProfile('Default', []);
+      writeProfile('Profile 3', [{ name: 'sid', value: 'profile-3-session', lastAccess: 100 }]);
+
+      expect(await getSessionCookieForDomain('chrome', 'co.example.com')).toBe(
+        'sid=profile-3-session'
+      );
+    });
+
+    it('picks the profile with the most recently used cookies and never merges across profiles', async () => {
+      writeProfile('Default', [{ name: 'sid', value: 'default-session', lastAccess: 100 }]);
+      writeProfile('Profile 2', [
+        { name: 'sid', value: 'profile-2-session', lastAccess: 900 },
+        { name: 'extra', value: 'only-in-2', lastAccess: 800 },
+      ]);
+      writeProfile('Profile 10', [{ name: 'sid', value: 'profile-10-session', lastAccess: 500 }]);
+
+      expect(await getSessionCookieForDomain('chrome', 'co.example.com')).toBe(
+        'extra=only-in-2; sid=profile-2-session'
+      );
+    });
+
+    it('reads only the requested profile, even when another one was used more recently', async () => {
+      writeProfile('Default', [{ name: 'sid', value: 'default-session', lastAccess: 100 }]);
+      writeProfile('Profile 2', [{ name: 'sid', value: 'profile-2-session', lastAccess: 900 }]);
+
+      expect(await getSessionCookieForDomain('chrome', 'co.example.com', 'Default')).toBe(
+        'sid=default-session'
+      );
+      expect(await getSessionCookieForDomain('chrome', 'co.example.com', 'Profile 2')).toBe(
+        'sid=profile-2-session'
+      );
+    });
+
+    it('returns null (does not fall back to another profile) when the requested profile is missing or empty', async () => {
+      writeProfile('Default', [{ name: 'sid', value: 'default-session', lastAccess: 100 }]);
+
+      expect(await getSessionCookieForDomain('chrome', 'co.example.com', 'Profile 7')).toBeNull();
+    });
+
+    it('lists profiles with the names from Local State, falling back to the directory name', () => {
+      writeProfile('Default', []);
+      writeProfile('Profile 3', []);
+      writeProfile('Profile 10', []);
+      const userData = path.join(fakeHome, platformRel(CHROME_USER_DATA_REL));
+      fs.writeFileSync(
+        path.join(userData, 'Local State'),
+        JSON.stringify({
+          profile: {
+            info_cache: { Default: { name: 'Personal' }, 'Profile 3': { name: 'Informa' } },
+          },
+        })
+      );
+
+      expect(listBrowserProfiles('chrome')).toEqual([
+        { dir: 'Default', name: 'Personal' },
+        { dir: 'Profile 3', name: 'Informa' },
+        { dir: 'Profile 10', name: 'Profile 10' },
+      ]);
+      expect(describeBrowser('chrome', 'Profile 3')).toBe('chrome (Informa)');
+      expect(describeBrowser('chrome', 'Profile 99')).toBe('chrome (Profile 99)');
+      expect(describeBrowser('chrome')).toBe('chrome');
+    });
+
+    it('lists directory names when Local State is missing or corrupt, and nothing for Firefox-family or uninstalled browsers', () => {
+      writeProfile('Default', []);
+      const userData = path.join(fakeHome, platformRel(CHROME_USER_DATA_REL));
+      fs.writeFileSync(path.join(userData, 'Local State'), '{not json');
+
+      expect(listBrowserProfiles('chrome')).toEqual([{ dir: 'Default', name: 'Default' }]);
+      expect(listBrowserProfiles('firefox')).toEqual([]);
+      expect(listBrowserProfiles('zen')).toEqual([]);
+      expect(listBrowserProfiles('edge')).toEqual([]);
+    });
+
+    it('ignores non-profile directories and profiles without a cookie DB', async () => {
+      const userData = path.join(fakeHome, platformRel(CHROME_USER_DATA_REL));
+      fs.mkdirSync(path.join(userData, 'Profile 1'), { recursive: true }); // no Cookies file
+      fs.mkdirSync(path.join(userData, 'System Profile'), { recursive: true });
+      writeProfile('Profile 4', [{ name: 'sid', value: 'profile-4-session', lastAccess: 1 }]);
+
+      expect(await getSessionCookieForDomain('chrome', 'co.example.com')).toBe(
+        'sid=profile-4-session'
+      );
+    });
   });
 
   it('degrades to null when the browser has no cookies file at all', async () => {
