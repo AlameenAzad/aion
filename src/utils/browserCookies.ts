@@ -6,7 +6,7 @@ import * as path from 'path';
 
 /** Single source of truth for supported browsers — schema.ts's zod enum and
  * every browser-choice prompt derive from this so adding one is a one-line change. */
-export const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'firefox', 'zen'] as const;
+export const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'helium', 'firefox', 'zen'] as const;
 
 export type SupportedBrowser = (typeof SUPPORTED_BROWSERS)[number];
 
@@ -14,6 +14,7 @@ export const BROWSER_CHOICES: { name: string; value: SupportedBrowser }[] = [
   { name: 'Chrome', value: 'chrome' },
   { name: 'Edge', value: 'edge' },
   { name: 'Brave', value: 'brave' },
+  { name: 'Helium', value: 'helium' },
   { name: 'Firefox', value: 'firefox' },
   { name: 'Zen', value: 'zen' },
 ];
@@ -63,6 +64,12 @@ const CHROMIUM_COOKIE_PATH: Record<
     linux: '.config/BraveSoftware/Brave-Browser/Default/Cookies',
     win32: 'AppData/Local/BraveSoftware/Brave-Browser/User Data/Default/Network/Cookies',
   },
+  // macOS path + keychain entry verified live; Linux/Windows best-effort.
+  helium: {
+    darwin: 'Library/Application Support/net.imput.helium/Default/Cookies',
+    linux: '.config/net.imput.helium/Default/Cookies',
+    win32: 'AppData/Local/imput/Helium/User Data/Default/Network/Cookies',
+  },
 };
 
 /** Windows only: where each browser keeps its AES key, DPAPI-wrapped, as JSON. */
@@ -70,12 +77,15 @@ const CHROMIUM_LOCAL_STATE_PATH: Record<ChromiumBrowser, string> = {
   chrome: 'AppData/Local/Google/Chrome/User Data/Local State',
   edge: 'AppData/Local/Microsoft/Edge/User Data/Local State',
   brave: 'AppData/Local/BraveSoftware/Brave-Browser/User Data/Local State',
+  helium: 'AppData/Local/imput/Helium/User Data/Local State',
 };
 
 const CHROMIUM_SAFE_STORAGE: Record<ChromiumBrowser, { service: string; account: string }> = {
   chrome: { service: 'Chrome Safe Storage', account: 'Chrome' },
   edge: { service: 'Microsoft Edge Safe Storage', account: 'Microsoft Edge' },
   brave: { service: 'Brave Safe Storage', account: 'Brave' },
+  // Helium names its keychain entry "Storage Key", not "Safe Storage".
+  helium: { service: 'Helium Storage Key', account: 'Helium' },
 };
 
 /** Linux only: libsecret item Chromium stores its AES-key password under. */
@@ -83,6 +93,7 @@ const LINUX_SAFE_STORAGE_APPLICATION: Record<ChromiumBrowser, string> = {
   chrome: 'chrome',
   edge: 'microsoft-edge',
   brave: 'brave',
+  helium: 'helium',
 };
 
 /**
@@ -179,7 +190,7 @@ export async function getSessionCookieForDomain(
   }
 }
 
-// ── Chromium family (Chrome / Edge / Brave) ────────────────────────────────
+// ── Chromium family (Chrome / Edge / Brave / Helium) ────────────────────────────────
 // Cookie values are AES-128-CBC encrypted with a key derived (PBKDF2) from a
 // password stored in the OS keychain under a browser-specific service name.
 // This is the same scheme tools like yt-dlp's --cookies-from-browser use.

@@ -77,7 +77,7 @@ All clients use Axios with `applyRetryInterceptor()` attached — 3 attempts, ex
 - **`JiraClient`** — resolves issue keys and summaries via JQL batch queries (`getIssuesBatch`, `getIssuesByIdBatch`).
 - **`DyceClient`** — creates time recordings. Requires `x-instance` and `x-company` headers. Uses OData pagination for listing.
 - **`PaserClient`** — authenticates (cookie-based), fetches leave cases for date matching.
-- **`PeopleForceClient`** (`src/api/peopleforce.ts`) — session-cookie authenticated (no login flow of its own); scrapes leave requests from server-rendered HTML via `cheerio` (`parseLeaveRequestRows`). The cookie comes from `resolvePeopleForceCookie` (`src/utils/browserCookies.ts`): a manually pasted cookie, or auto-read from the browser's cookie store (Chrome/Edge/Brave/Firefox/Zen).
+- **`PeopleForceClient`** (`src/api/peopleforce.ts`) — session-cookie authenticated (no login flow of its own); scrapes leave requests from server-rendered HTML via `cheerio` (`parseLeaveRequestRows`). The cookie comes from `resolvePeopleForceCookie` (`src/utils/browserCookies.ts`): a manually pasted cookie, or auto-read from the browser's cookie store (Chrome/Edge/Brave/Helium/Firefox/Zen).
 - **`msauth.ts`** — handles Dyce OAuth2 via Microsoft device code flow (`getDeviceCode` / `pollForToken`). `resolveDyceToken(config)` auto-refreshes using the stored refresh token, falling back to `silentlyReauthenticateDyce()` (browser-SSO-based) when the refresh token itself has expired, and writes the new token back via `updateConfig()`.
 
 ### Build

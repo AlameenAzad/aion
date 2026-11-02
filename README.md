@@ -35,7 +35,7 @@ Project site: https://alameenazad.github.io/aion/
 - Auto-matches leave requests by date range for vacation and sick leave, from either **Paser** or **PeopleForce**
 - Silently skips already-synced entries (no duplicates, ever)
 - Keeps your Dyce session alive automatically via a background token-refresh job (`aion cron install`) — and can now **silently re-authenticate itself** using your browser's existing Microsoft SSO session when the refresh token's 24h lifetime runs out, no manual DevTools paste required
-- Reads browser session cookies (PeopleForce login, Microsoft SSO) from Chrome, Edge, Brave, Firefox, or Zen
+- Reads browser session cookies (PeopleForce login, Microsoft SSO) from Chrome, Edge, Brave, Helium, Firefox, or Zen
 - Rich terminal UI: ASCII banner, spinners, colorized preview table
 
 ---
@@ -432,11 +432,11 @@ Instead of needing a manual DevTools paste roughly once a day, aion can silently
 aion config re-auth-dyce
 ```
 
-(also offered as a one-time prompt automatically, the first time you hit an expired session after upgrading to a version with this feature). Pick whichever browser you're logged into Dyce/Microsoft with — Chrome, Edge, Brave, Firefox, and Zen are all supported. From then on, `aion sync`/`status`/the token-refresh cron all fall back to this automatically whenever the stored refresh token has died — no interaction needed.
+(also offered as a one-time prompt automatically, the first time you hit an expired session after upgrading to a version with this feature). Pick whichever browser you're logged into Dyce/Microsoft with — Chrome, Edge, Brave, Helium, Firefox, and Zen are all supported. From then on, `aion sync`/`status`/the token-refresh cron all fall back to this automatically whenever the stored refresh token has died — no interaction needed.
 
 Caveats:
 - Needs a live Microsoft SSO session in that browser (i.e. you're actually logged into Dyce/Microsoft somewhere).
-- On macOS, reading Chrome/Edge/Brave's cookie store needs "Full Disk Access" granted to the terminal app running aion (System Settings → Privacy & Security). Firefox/Zen don't need this.
+- On macOS, reading Chrome/Edge/Brave/Helium's cookie store needs "Full Disk Access" granted to the terminal app running aion (System Settings → Privacy & Security). Firefox/Zen don't need this.
 - If the *background cron job* hits an expired token and can't silently re-auth (e.g. it lacks the same OS permissions your interactive terminal has), it fails safely and logs the error — run `aion config re-auth-dyce` once yourself to recover.
 
 ### Preventing access-token staleness
